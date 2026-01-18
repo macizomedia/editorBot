@@ -1,13 +1,6 @@
 from enum import Enum
-from .store import Conversation
-from .machine import BotState, EventType
+from .models import BotState, Conversation
 
-class BotState(Enum):
-    IDLE = "idle"
-    TRANSCRIBED = "transcribed"
-    MEDIATED = "mediated"
-    AWAITING_EDIT = "awaiting_edit"
-    CONFIRMED = "confirmed"
 
 class EventType(Enum):
     VOICE_RECEIVED = "voice_received"
@@ -26,42 +19,60 @@ def handle_event(
     event: EventType,
     payload: str | None = None,
 ) -> Conversation:
-    """
-    Returns a NEW Conversation with updated state.
-    Does not mutate the original.
-    """
+    state = convo.state
 
-    # IDLE → VOICE
-    if convo.state == BotState.IDLE:
+    # IDLE
+    if state == BotState.IDLE:
         if event == EventType.VOICE_RECEIVED:
-            return Conversation(
-                state=BotState.TRANSCRIBED,
-                transcript=payload,
-            )
+            return Conversation(state=BotState.TRANSCRIBED)
 
-        raise InvalidTransition(convo.state, event)
+        raise InvalidTransition(state, event)
 
-    # TRANSCRIBED → MEDIATED
-    if convo.state == BotState.TRANSCRIBED:
+    # TRANSCRIBED
+    if state == BotState.TRANSCRIBED:
         if event == EventType.TEXT_RECEIVED:
             return Conversation(
                 state=BotState.MEDIATED,
+                transcript=payload,
+            )
+
+        raise InvalidTransition(state, event)
+
+    # MEDIATED
+    if state == BotState.MEDIATED:
+        if event == EventType.TEXT_RECEIVED:
+            return Conversation(
+                state=BotState.AWAITING_EDIT,
+                transcript=convo.transcript,
+                mediated_text=payload,
+            )
+        if event == EventType.COMMAND_OK:
+            return Conversation(
+                state=BotState.CONFIRMED,
+                transcript=convo.transcript,
+                mediated_text=convo.mediated_text,
+                )
+        if event == EventType.COMMAND_EDITAR:
+            return Conversation(
+                state=BotState.AWAITING_EDIT,
+                transcript=convo.transcript,
+                mediated_text=convo.mediated_text,
+                )
+        if event == EventType.COMMAND_CANCELAR:
+            return Conversation(state=BotState.IDLE)
+
+
+        raise InvalidTransition(state, event)
+
+    # AWAITING_EDIT
+    if state == BotState.AWAITING_EDIT:
+        if event == EventType.TEXT_RECEIVED:
+            return Conversation(
+                state=BotState.AWAITING_EDIT,
                 transcript=convo.transcript,
                 mediated_text=payload,
             )
 
-        raise InvalidTransition(convo.state, event)
-
-    # MEDIATED → AWAITING_EDIT
-    if convo.state == BotState.MEDIATED:
-        return Conversation(
-            state=BotState.AWAITING_EDIT,
-            transcript=convo.transcript,
-            mediated_text=convo.mediated_text,
-        )
-
-    # AWAITING_EDIT
-    if convo.state == BotState.AWAITING_EDIT:
         if event == EventType.COMMAND_OK:
             return Conversation(
                 state=BotState.CONFIRMED,
@@ -69,25 +80,13 @@ def handle_event(
                 mediated_text=convo.mediated_text,
             )
 
-        if event == EventType.TEXT_RECEIVED:
-            # User pasted edited text
-            return Conversation(
-                state=BotState.AWAITING_EDIT,
-                transcript=convo.transcript,
-                mediated_text=payload,
-            )
-
         if event == EventType.COMMAND_CANCELAR:
             return Conversation(state=BotState.IDLE)
 
-        raise InvalidTransition(convo.state, event)
+        raise InvalidTransition(state, event)
 
-    # CONFIRMED → reset
-    if convo.state == BotState.CONFIRMED:
+    # CONFIRMED
+    if state == BotState.CONFIRMED:
         return Conversation(state=BotState.IDLE)
 
-    raise InvalidTransition(convo.state, event)
-
-
-
-
+    raise InvalidTransition(state, event)
