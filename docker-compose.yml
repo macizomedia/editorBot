@@ -8,5 +8,13 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-pro}
+      - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.3}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_LANG=${WHISPER_LANG:-es}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/secure/google-credentials.json}
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ../secure:/app/secure:ro
     restart: unless-stopped

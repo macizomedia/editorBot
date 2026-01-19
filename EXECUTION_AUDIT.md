@@ -1,7 +1,7 @@
 # 🔍 EditorBot Execution & Code Audit Report
 
-**Date:** 2025-01-16  
-**Status:** ✅ READY TO RUN (with configuration)  
+**Date:** 2025-01-16
+**Status:** ✅ READY TO RUN (with configuration)
 **Test Method:** Code analysis + Module import verification
 
 ---
@@ -121,7 +121,7 @@ def transcribe_audio(file_path: str) -> str:
     return "transcripción de prueba"
 ```
 
-**Note:** Currently returns dummy text "transcripción de prueba"  
+**Note:** Currently returns dummy text "transcripción de prueba"
 **TODO:** Implement with actual Whisper or other transcription service
 
 ---
@@ -161,11 +161,8 @@ def transcribe_audio(file_path: str) -> str:
 
 ## 🚨 SECURITY ALERT - EXPOSED CREDENTIALS
 
-**URGENT:** Your `.env` file contains:
-```
-TELEGRAM_BOT_TOKEN=8476966748:AAExiu5l-bUzED3lT_VXM0ISpwReV6Wjjug
-GEMINI_API_KEY=AIzaSyD_FkvMurPpk1GWL_HL9WEiSWOvOSwlzJo
-```
+**URGENT:** A prior `.env` file contained exposed credentials.
+These values have been **redacted** and should be **revoked immediately**.
 
 ### Recommended Actions:
 1. **Immediately revoke these credentials:**
@@ -326,5 +323,5 @@ docker-compose up --build
 
 ---
 
-**Report Generated:** 2025-01-16  
+**Report Generated:** 2025-01-16
 **Bot Status:** ✅ CODE READY | ⚠️ CREDENTIALS EXPOSED (action required)

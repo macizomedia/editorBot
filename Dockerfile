@@ -19,9 +19,9 @@ COPY editorBot/ /app/editorBot/
 
 WORKDIR /app/editorBot
 
-# Install dependencies - dialect_mediator FIRST, then editorBot
+# Install dependencies - dialect_mediator FIRST, then editorBot with local transcription extras
 RUN pip install --no-cache-dir -e /app/dialect_mediator && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e ".[local-transcription]"
 
 # Use non-root user
 USER appuser
