@@ -1,13 +1,24 @@
+import logging
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.state.machine import handle_event, EventType
 from bot.state.runtime import get_conversation, save_conversation
 
+logger = logging.getLogger(__name__)
 
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.message.text:
+        logger.warning("Received text update without message payload")
+        return
+
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
+    if not text:
+        await update.message.reply_text("⚠️ El mensaje está vacío.")
+        return
 
     convo = get_conversation(chat_id)
 
@@ -26,8 +37,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "❌ Proceso cancelado."
             )
         elif text.upper() == "EDITAR":
+            convo = handle_event(convo, EventType.COMMAND_EDITAR)
             await update.message.reply_text(
-                 "✏️ Pega el texto editado a continuación."
+                "✏️ Pega el texto editado a continuación."
             )
 
 
@@ -40,6 +52,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_conversation(chat_id, convo)
 
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {e}")
+    except Exception:
+        logger.exception("Error handling text message")
+        await update.message.reply_text("⚠️ Ocurrió un error. Intenta de nuevo.")
 

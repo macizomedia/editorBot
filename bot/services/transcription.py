@@ -1,6 +1,5 @@
 import os
 import io
-import tempfile
 from google.cloud import speech_v1
 from google.api_core import exceptions as google_exceptions
 
@@ -28,16 +27,21 @@ logger = logging.getLogger(__name__)
 def _convert_audio_to_linear16(file_path: str) -> bytes:
     """
     Convert audio file to LINEAR16 format (16-bit PCM) at 16kHz.
-    
+
     Supports: WAV, MP3, OGG, FLAC, etc. (anything pydub supports)
     Returns: Raw LINEAR16 audio bytes
     """
     try:
         # Load audio with pydub (auto-detects format)
         audio = AudioSegment.from_file(file_path)
-        
-        logger.debug(f"Audio loaded - channels: {audio.channels}, frame_rate: {audio.frame_rate}, duration: {len(audio)}ms")
-        
+
+        logger.debug(
+            "Audio loaded - channels: %s, frame_rate: %s, duration: %sms",
+            audio.channels,
+            audio.frame_rate,
+            len(audio),
+        )
+
         # Convert to mono 16kHz if needed
         if audio.channels != 1:
             audio = audio.set_channels(1)
@@ -54,7 +58,7 @@ def _convert_audio_to_linear16(file_path: str) -> bytes:
         audio.export(pcm_io, format="wav")
         pcm_io.seek(0)
         return pcm_io.read()
-    
+
     except Exception as e:
         logger.error(f"Audio conversion error: {str(e)}")
         raise
@@ -62,30 +66,31 @@ def _convert_audio_to_linear16(file_path: str) -> bytes:
 
 def transcribe_audio(file_path: str) -> str:
     """
-    Transcribe audio file using Google Cloud Speech-to-Text API.
-    
+    Transcribe audio file using local Whisper (faster-whisper preferred).
+
     Takes a local audio file path (WAV, MP3, OGG, FLAC, etc.).
-    Automatically converts to required format (LINEAR16, 16kHz).
     Returns raw transcription text in Spanish.
-    
-    Requires: GOOGLE_APPLICATION_CREDENTIALS environment variable
-    pointing to service account JSON key file.
+
+    Local transcription requires optional dependencies:
+    pip install -e '.[local-transcription]'
+
+    Falls back to Google Cloud Speech-to-Text if local models are unavailable.
     """
     try:
         # Validate file exists
         if not os.path.exists(file_path):
             logger.error(f"Audio file not found: {file_path}")
             return "[Error: Audio file not found]"
-        
+
         # Check file size (must be > 0)
         file_size = os.path.getsize(file_path)
         if file_size == 0:
             logger.error(f"Audio file is empty: {file_path}")
             return "[Error: Audio file is empty]"
-        
+
         logger.debug(f"Processing audio file: {file_path} (size: {file_size} bytes)")
 
-        # If local transcription available, prefer faster_whisper -> whisper
+        # Local transcription only (faster_whisper -> whisper)
         if FASTER_WHISPER_AVAILABLE:
             try:
                 model_name = os.environ.get("WHISPER_MODEL", "small")
@@ -128,10 +133,10 @@ def transcribe_audio(file_path: str) -> str:
 
         # Initialize client
         client = speech_v1.SpeechClient()
-        
+
         # Prepare audio for recognition
         audio = speech_v1.RecognitionAudio(content=audio_content)
-        
+
         # Configure recognition request (start with Venezuelan locale)
         language = "es-VE"
         config = speech_v1.RecognitionConfig(
@@ -169,28 +174,29 @@ def transcribe_audio(file_path: str) -> str:
             else:
                 # Re-raise other InvalidArgument errors
                 raise
-        
+
         logger.debug(f"Response received - {len(response.results)} result(s)")
-        
+
         # Extract transcript
         transcript = ""
         for i, result in enumerate(response.results):
-            logger.debug(f"Result {i}: confidence={result.results[0].confidence if result.results else 'N/A'}")
+            logger.debug(
+                "Result %s: confidence=%s",
+                i,
+                result.results[0].confidence if result.results else "N/A",
+            )
             if result.alternatives:
                 text = result.alternatives[0].transcript
                 transcript += text + " "
                 logger.debug(f"  Transcript: {text}")
-        
+
         if not transcript.strip():
             logger.warning("No speech detected in audio")
             return "[No speech detected]"
-        
+
         logger.info(f"Transcription successful: {len(transcript)} chars")
         return transcript.strip()
-        
-    except FileNotFoundError:
-        logger.error(f"Audio file not found: {file_path}")
-        return "[Error: Audio file not found]"
+
     except Exception as e:
         logger.error(f"Transcription error: {type(e).__name__}: {str(e)}", exc_info=True)
         return f"[Error: {str(e)}]"

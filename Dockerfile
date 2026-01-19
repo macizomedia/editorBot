@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Install system dependencies
@@ -7,7 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy both project directories
+# Create non-root user
+RUN useradd -m appuser
+
+# Copy both project directories (build context is repo root)
 COPY dialect_mediator/ /app/dialect_mediator/
 COPY editorBot/ /app/editorBot/
 
@@ -17,8 +23,8 @@ WORKDIR /app/editorBot
 RUN pip install --no-cache-dir -e /app/dialect_mediator && \
     pip install --no-cache-dir -e .
 
-# Set environment variables (can be overridden at runtime)
-ENV PYTHONUNBUFFERED=1
+# Use non-root user
+USER appuser
 
 # Run the bot
 CMD ["python", "-m", "bot.bot"]

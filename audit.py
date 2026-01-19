@@ -67,7 +67,7 @@ print('-'*70)
 
 deps = [
     ('telegram', 'python-telegram-bot'),
-    ('google.generativeai', 'google-generativeai'),
+    ('google.genai', 'google-genai'),
     ('pydub', 'pydub'),
 ]
 

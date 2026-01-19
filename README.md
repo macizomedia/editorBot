@@ -51,8 +51,9 @@ A Telegram bot that mediates text dialects to standardized Spanish using the dia
 
 2. **Docker manual:**
    ```bash
-   docker build -t editorbot .
-   docker run --env-file .env editorbot
+   # Run from repo root for correct build context
+   docker build -t editorbot -f editorBot/Dockerfile .
+   docker run --env-file editorBot/.env editorbot
    ```
 
 ### EC2 Deployment
@@ -144,6 +145,9 @@ editorBot/
 | GEMINI_API_KEY | ✅ | Google Gemini API key |
 | GEMINI_MODEL | ❌ | Model name (default: gemini-2.0-pro) |
 | GEMINI_TEMPERATURE | ❌ | Temperature for responses (default: 0.3) |
+| LOG_LEVEL | ❌ | Logging level (default: INFO) |
+| WHISPER_MODEL | ❌ | Local transcription model (when enabled) |
+| WHISPER_LANG | ❌ | Local transcription language (default: es) |
 
 ## Credential & Environment Management
 
@@ -151,6 +155,11 @@ editorBot/
 - Copy `.env.example` to `.env`, then fill in your secrets (never commit `.env`).
 - Docker Compose automatically loads values from `editorBot/.env` via `--env-file`.
 - For local testing you can export on the fly: `export $(grep -v '^#' .env | xargs)`.
+
+### Local Transcription (Whisper)
+Local Whisper is preferred, with Google Speech-to-Text as a fallback when local
+models are not available. Install the extra:
+`pip install -e '.[local-transcription]'`
 
 ### Control EC2 (Always-on CPU)
 - `scripts/ec2_deploy.sh` writes the runtime `.env` to `/opt/editorbot/editorBot/.env`.
