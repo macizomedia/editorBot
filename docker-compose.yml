@@ -17,4 +17,9 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ../secure:/app/secure:ro
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import bot" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
