@@ -57,6 +57,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "- CANCELAR"
                 )
             elif convo.state == BotState.FINAL_SCRIPT:
+                convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
                 await update.message.reply_text(
                     "✅ Guion final confirmado. Ahora elige un template:",
@@ -101,6 +102,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "- CANCELAR"
                 )
             elif convo.state == BotState.FINAL_SCRIPT:
+                convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
                 await update.message.reply_text(
                     "✅ Guion final confirmado. Ahora elige un template:",
