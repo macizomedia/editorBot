@@ -4,9 +4,27 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.state.machine import handle_event, EventType
+from bot.state.models import BotState
 from bot.state.runtime import get_conversation, save_conversation
+from bot.services.script_generation import generate_script
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 logger = logging.getLogger(__name__)
+
+
+def _template_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Long", callback_data="template:long"),
+                InlineKeyboardButton("Short", callback_data="template:short"),
+            ],
+            [
+                InlineKeyboardButton("Reel", callback_data="template:reel"),
+                InlineKeyboardButton("Slides", callback_data="template:slides"),
+            ],
+        ]
+    )
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -26,9 +44,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if text.upper() == "OK":
             convo = handle_event(convo, EventType.COMMAND_OK)
 
-            await update.message.reply_text(
-                "✅ Texto confirmado. Continuamos."
-            )
+            if convo.state == BotState.SCRIPT_DRAFTED:
+                script_draft = generate_script(convo.mediated_text or "")
+                convo.script_draft = script_draft
+                save_conversation(chat_id, convo)
+                await update.message.reply_text(
+                    "📝 Guion (borrador):\n\n"
+                    f"{script_draft}\n\n"
+                    "Responde con:\n"
+                    "- OK\n"
+                    "- EDITAR (pegando texto)\n"
+                    "- CANCELAR"
+                )
+            elif convo.state == BotState.FINAL_SCRIPT:
+                save_conversation(chat_id, convo)
+                await update.message.reply_text(
+                    "✅ Guion final confirmado. Ahora elige un template:",
+                    reply_markup=_template_keyboard(),
+                )
+            elif convo.state == BotState.SELECT_TEMPLATE:
+                save_conversation(chat_id, convo)
+                await update.message.reply_text("Selecciona un template con los botones.")
+            else:
+                await update.message.reply_text("✅ Texto confirmado. Continuamos.")
 
         elif text.upper() == "CANCELAR":
             convo = handle_event(convo, EventType.COMMAND_CANCELAR)
@@ -42,13 +80,36 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "✏️ Pega el texto editado a continuación."
             )
 
+        elif text.upper() == "NEXT":
+            convo = handle_event(convo, EventType.COMMAND_NEXT)
+            await update.message.reply_text("Continuamos al siguiente paso.")
+
 
         else:
             convo = handle_event(convo, EventType.TEXT_RECEIVED, text)
 
-            await update.message.reply_text(
-                "✍️ Texto recibido.\nPuedes editarlo o responder OK."
-            )
+            if convo.state == BotState.SCRIPT_DRAFTED:
+                script_draft = generate_script(convo.mediated_text or "")
+                convo.script_draft = script_draft
+                save_conversation(chat_id, convo)
+                await update.message.reply_text(
+                    "📝 Guion (borrador):\n\n"
+                    f"{script_draft}\n\n"
+                    "Responde con:\n"
+                    "- OK\n"
+                    "- EDITAR (pegando texto)\n"
+                    "- CANCELAR"
+                )
+            elif convo.state == BotState.FINAL_SCRIPT:
+                save_conversation(chat_id, convo)
+                await update.message.reply_text(
+                    "✅ Guion final confirmado. Ahora elige un template:",
+                    reply_markup=_template_keyboard(),
+                )
+            else:
+                await update.message.reply_text(
+                    "✍️ Texto recibido.\nPuedes editarlo o responder OK."
+                )
 
         save_conversation(chat_id, convo)
 

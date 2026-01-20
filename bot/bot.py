@@ -2,12 +2,14 @@ import logging
 import os
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
 
 from bot.handlers.voice import handle_voice
 from bot.handlers.text import handle_text
+from bot.handlers.callbacks import handle_callback
 
 
 def _configure_logging() -> None:
@@ -29,6 +31,7 @@ def main() -> None:
 
     app = ApplicationBuilder().token(token).build()
 
+    app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
