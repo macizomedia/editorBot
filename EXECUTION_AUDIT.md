@@ -161,12 +161,6 @@ def transcribe_audio(file_path: str) -> str:
 
 ## 🚨 SECURITY ALERT - EXPOSED CREDENTIALS
 
-**URGENT:** Your `.env` file contains:
-```
-TELEGRAM_BOT_TOKEN=8476966748:AAExiu5l-bUzED3lT_VXM0ISpwReV6Wjjug
-GEMINI_API_KEY=AIzaSyD_FkvMurPpk1GWL_HL9WEiSWOvOSwlzJo
-```
-
 ### Recommended Actions:
 1. **Immediately revoke these credentials:**
    - Telegram: Delete and recreate bot via @BotFather
