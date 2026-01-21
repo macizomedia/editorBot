@@ -1,12 +1,32 @@
 # Template Integration Deployment Guide
 
-**Date:** 21 January 2026  
-**Branch:** Development  
+**Date:** 21 January 2026
+**Branch:** Development
 **Status:** Ready for EC2 Deployment
+**Deployment Method:** 🤖 Automated via GitHub Actions
 
 ---
 
-## ✅ Completed Work
+## ⚠️ SECURITY NOTICE
+
+This project uses **automated deployment via GitHub Actions** with AWS SSM (Systems Manager).
+
+**✅ DO:**
+- Deploy by merging to `main` branch (triggers GitHub Actions)
+- Use SSM Session Manager for manual access (no SSH keys)
+- Monitor deployments via GitHub Actions UI
+
+**❌ DON'T:**
+- Manually SSH to EC2 and run git pull
+- Expose SSH keys or use direct SSH access
+- Run docker commands manually on EC2
+
+**Why?** The GitHub Actions workflow:
+- Uses SSM (no exposed SSH ports)
+- Has proper error handling and rollback
+- Logs all actions to CloudWatch
+- Updates submodules correctly
+- Validates deployment health
 
 ### Session 1: Foundation
 - ✅ Created `bot/templates/` module structure
@@ -35,65 +55,100 @@
 
 ---
 
-## 🚀 Deployment Steps
+## 🚀 Deployment Steps (Automated via GitHub Actions)
 
-### Step 1: Push Development Branch
+### ⚠️ IMPORTANT: Use Automated Deployment
+
+**DO NOT deploy manually via SSH.** This project has a GitHub Actions workflow that handles deployment safely via AWS SSM.
+
+### Prerequisites
+
+Ensure these GitHub Secrets are configured in `editorbot-stack` repository:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION` (eu-central-1)
+- `EDITORBOT_INSTANCE_ID` (i-013b229ba83c93cb9)
+- `TOKEN_DEPLOY` (GitHub PAT for submodule access)
+
+### Step 1: Update Environment Variables (One-time Setup)
+
+Before first deployment, add TEMPLATE_API_URL to EC2 via SSM:
 
 ```bash
-cd /Users/user/Documents/BLAS/PRODUCTION/DIALECT_BOT_TERRAFORM_AWS_V1/editorbot-stack/editorBot
-git push origin Development
-```
+# Connect securely via SSM (no SSH keys needed)
+aws ssm start-session --target i-013b229ba83c93cb9 --region eu-central-1
 
-### Step 2: Update Environment Variables on EC2
-
-SSH to EC2 instance and add template API URL:
-
-```bash
-# Connect via SSM (recommended)
-aws ssm start-session --target i-013b229ba83c93cb9
-
-# Or SSH directly
-ssh ubuntu@18.198.2.201
-
-# Add environment variable
+# Once connected
 cd /home/ubuntu/editorbot
 echo 'TEMPLATE_API_URL=https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com' >> .env
 
 # Verify
-cat .env | grep TEMPLATE
+grep TEMPLATE_API_URL .env
+
+# Exit session
+exit
 ```
 
-### Step 3: Pull Latest Code on EC2
+### Step 2: Merge Development → Main (Triggers Deployment)
+
+**Option A: Via Pull Request (Recommended)**
+
+1. Go to: https://github.com/macizomedia/editorBot/pull/new/Development
+2. Create Pull Request: `Development` → `main`
+3. Review changes
+4. Merge PR
+
+**Option B: Direct Merge (Fast)**
 
 ```bash
-cd /home/ubuntu/editorbot
-git fetch origin
-git checkout Development
-git pull origin Development
+# In editorBot submodule
+cd /Users/user/Documents/BLAS/PRODUCTION/DIALECT_BOT_TERRAFORM_AWS_V1/editorbot-stack/editorBot
+git checkout main
+git pull origin main
+git merge Development
+git push origin main
 
-# Update submodules if needed
-git submodule update --init --recursive
+# In parent editorbot-stack repo
+cd /Users/user/Documents/BLAS/PRODUCTION/DIALECT_BOT_TERRAFORM_AWS_V1/editorbot-stack
+git add editorBot
+git commit -m "chore: update editorBot submodule with template integration"
+git push origin main
 ```
 
-### Step 4: Rebuild Docker Container
+### Step 3: Monitor GitHub Actions Deployment
+
+1. Go to: https://github.com/macizomedia/editorbot-stack/actions
+2. Watch the `deploy` workflow run
+3. Workflow will automatically:
+   - Pull latest code on EC2 via SSM
+   - Update submodules (including editorBot)
+   - Rebuild Docker container
+   - Start services
+   - Verify health
+
+**Deployment takes ~5 minutes**
+
+### Step 4: Verify Deployment via CloudWatch
+
+Monitor SSM command execution:
 
 ```bash
-cd /home/ubuntu/editorbot
+# Get latest command ID from GitHub Actions output
+COMMAND_ID="<from-github-actions>"
 
-# Stop current container
-docker compose down
+# View execution status
+aws ssm list-command-invocations \
+  --command-id "$COMMAND_ID" \
+  --details \
+  --region eu-central-1
 
-# Rebuild with new dependencies
-docker compose build --no-cache
-
-# Start with new code
-docker compose up -d
-
-# Verify logs
-docker compose logs -f editorbot
+# View logs
+aws logs tail /content-pipeline/editorbot --follow --region eu-central-1
 ```
 
-### Step 5: Verify Deployment
+### Step 5: Verify Deployment (Post-Deployment Tests)
+
+Once GitHub Actions completes, verify the deployment:
 
 #### Test API Connectivity
 ```bash
@@ -242,21 +297,29 @@ print(convo.final_script)
 
 ## 🔄 Rollback Plan
 
-If issues arise:
+If issues arise after deployment:
 
+**Option 1: Via GitHub Actions (Recommended)**
 ```bash
-# On EC2
-cd /home/ubuntu/editorbot
-git checkout main
-docker compose down
-docker compose build
-docker compose up -d
+# Revert the merge commit in editorbot-stack
+cd /Users/user/Documents/BLAS/PRODUCTION/DIALECT_BOT_TERRAFORM_AWS_V1/editorbot-stack
+git revert HEAD
+git push origin main
+
+# GitHub Actions will automatically deploy the reverted version
 ```
 
-To disable templates without rollback:
+**Option 2: Manual Rollback (Emergency Only)**
 ```bash
-# Comment out template imports in handlers
-# Bot will skip template selection and go directly to render
+# Connect via SSM
+aws ssm start-session --target i-013b229ba83c93cb9 --region eu-central-1
+
+# On EC2
+cd /home/ubuntu/editorbot
+git reset --hard <previous-commit-sha>
+git submodule update --recursive
+docker compose down
+docker compose up -d --build
 ```
 
 ---
@@ -287,6 +350,6 @@ To disable templates without rollback:
 
 ---
 
-**Deployment Owner:** Development Team  
-**Last Updated:** 21 January 2026  
+**Deployment Owner:** Development Team
+**Last Updated:** 21 January 2026
 **Status:** ✅ Ready for Production Deployment

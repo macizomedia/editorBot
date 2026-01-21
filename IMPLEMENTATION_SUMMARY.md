@@ -122,33 +122,49 @@ User feedback (pass/fail/warn)
 
 ## 🚀 Next Steps for Deployment
 
-### 1. Environment Setup (5 min)
+### Deployment Method: GitHub Actions (Automated & Safe)
+
+**Prerequisites:**
+1. Ensure TEMPLATE_API_URL is set in EC2 .env file (one-time setup)
+2. Verify GitHub Secrets configured in editorbot-stack repo
+
+### Deployment Process (5-10 minutes)
+
+**1. Merge Development → Main**
 ```bash
-# On EC2 instance
-echo 'TEMPLATE_API_URL=https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com' >> /home/ubuntu/editorbot/.env
+# Option A: Create PR (recommended)
+https://github.com/macizomedia/editorBot/pull/new/Development
+
+# Option B: Direct merge
+cd editorBot/
+git checkout main
+git merge Development
+git push origin main
 ```
 
-### 2. Code Deployment (10 min)
+**2. Update Parent Repo (editorbot-stack)**
 ```bash
-cd /home/ubuntu/editorbot
-git fetch origin
-git checkout Development
-git pull origin Development
+cd editorbot-stack/
+git add editorBot
+git commit -m "chore: update editorBot with template integration"
+git push origin main  # ← This triggers GitHub Actions deployment
 ```
 
-### 3. Container Rebuild (5 min)
-```bash
-docker compose down
-docker compose build --no-cache
-docker compose up -d
-```
+**3. Monitor Deployment**
+- Watch: https://github.com/macizomedia/editorbot-stack/actions
+- GitHub Actions will:
+  - Pull code via SSM (no SSH)
+  - Update submodules
+  - Rebuild Docker container
+  - Verify health
 
-### 4. Verification (10 min)
-- Test API connectivity
-- Test validation logic
-- End-to-end Telegram bot test
+**4. Verify Deployment**
+- Check CloudWatch logs: `/content-pipeline/editorbot`
+- Test with Telegram bot
+- Verify template selection appears
 
-**Total Time: ~30 minutes**
+**Total Time: ~10 minutes**
+**Downtime: None** (rolling Docker update)
 
 ---
 
