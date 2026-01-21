@@ -11,6 +11,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_LANG=${WHISPER_LANG:-es}
+      - TEMPLATE_API_URL=${TEMPLATE_API_URL:-https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/secure/google-credentials.json}
       - PYTHONUNBUFFERED=1
     volumes:
