@@ -26,14 +26,17 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         convo = handle_event(convo, EventType.VOICE_RECEIVED)
         save_conversation(chat_id, convo)
 
-        # 2. Download voice file
+        # 2. Send user feedback
+        await update.message.reply_text("🎤 Audio recibido. Transcribiendo...")
+
+        # 3. Download voice file
         voice = update.message.voice
         file = await context.bot.get_file(voice.file_id)
 
         with tempfile.NamedTemporaryFile(suffix=".ogg") as tmp:
             await file.download_to_drive(tmp.name)
 
-            # 3. Transcribe
+            # 4. Transcribe
             transcript = transcribe_audio(tmp.name)
 
             if transcript.startswith("[Error") or transcript.startswith("[No speech"):
@@ -43,8 +46,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
                 return
 
-        # 4. FSM: transcription ready
-        convo = handle_event(convo, EventType.TEXT_RECEIVED, transcript)
+        # 5. FSM: transcription complete
+        convo = handle_event(convo, EventType.TRANSCRIPTION_COMPLETE, transcript)
         save_conversation(chat_id, convo)
 
         # 5. Mediate

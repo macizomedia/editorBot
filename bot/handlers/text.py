@@ -63,7 +63,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "✅ Guion final confirmado. Ahora elige un template:",
                     reply_markup=_template_keyboard(),
                 )
-            elif convo.state == BotState.SELECT_TEMPLATE:
+            elif convo.state == BotState.TEMPLATE_PROPOSED:
                 save_conversation(chat_id, convo)
                 await update.message.reply_text("Selecciona un template con los botones.")
             else:
