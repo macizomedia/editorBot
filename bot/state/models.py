@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 class BotState(Enum):
@@ -27,5 +27,12 @@ class Conversation:
     mediated_text: Optional[str] = None
     script_draft: Optional[str] = None
     final_script: Optional[str] = None
+
+    # Template system
     template_id: Optional[str] = None
+    template_spec: Optional[Dict[str, Any]] = None  # Cached template JSON
+    validation_result: Optional[Dict[str, Any]] = None  # Validation status
+
+    # Asset selection
     soundtrack_id: Optional[str] = None
+    asset_config: Optional[Dict[str, Any]] = None  # Image generation config

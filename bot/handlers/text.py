@@ -7,24 +7,9 @@ from bot.state.machine import handle_event, EventType
 from bot.state.models import BotState
 from bot.state.runtime import get_conversation, save_conversation
 from bot.services.script_generation import generate_script
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from bot.handlers.callbacks import send_template_selection
 
 logger = logging.getLogger(__name__)
-
-
-def _template_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Long", callback_data="template:long"),
-                InlineKeyboardButton("Short", callback_data="template:short"),
-            ],
-            [
-                InlineKeyboardButton("Reel", callback_data="template:reel"),
-                InlineKeyboardButton("Slides", callback_data="template:slides"),
-            ],
-        ]
-    )
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -59,10 +44,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             elif convo.state == BotState.FINAL_SCRIPT:
                 convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
-                await update.message.reply_text(
-                    "✅ Guion final confirmado. Ahora elige un template:",
-                    reply_markup=_template_keyboard(),
-                )
+                # Use new template API to fetch and display templates
+                await send_template_selection(chat_id, context)
             elif convo.state == BotState.TEMPLATE_PROPOSED:
                 save_conversation(chat_id, convo)
                 await update.message.reply_text("Selecciona un template con los botones.")
@@ -104,10 +87,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             elif convo.state == BotState.FINAL_SCRIPT:
                 convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
-                await update.message.reply_text(
-                    "✅ Guion final confirmado. Ahora elige un template:",
-                    reply_markup=_template_keyboard(),
-                )
+                # Use new template API to fetch and display templates
+                await send_template_selection(chat_id, context)
             else:
                 await update.message.reply_text(
                     "✍️ Texto recibido.\nPuedes editarlo o responder OK."
