@@ -11,7 +11,7 @@ from bot.templates.client import TemplateClient
 
 class TestTemplateModels:
     """Test template data models."""
-    
+
     def test_template_from_dict(self):
         """Test creating TemplateSpec from dictionary."""
         data = {
@@ -46,16 +46,16 @@ class TestTemplateModels:
                 "violation_strategy": "reject"
             }
         }
-        
+
         template = TemplateSpec.from_dict(data)
-        
+
         assert template.id == "test_template"
         assert template.name == "Test Template"
         assert template.duration.min_seconds == 30
         assert template.duration.max_seconds == 60
         assert template.script_structure.min_beats == 3
         assert template.enforcement.strict is True
-    
+
     def test_template_to_dict(self):
         """Test serializing TemplateSpec to dictionary."""
         data = {
@@ -74,17 +74,17 @@ class TestTemplateModels:
             "visual_rules": {"visual_strategy": "mixed", "visuals_required": True},
             "enforcement": {"strict": True, "violation_strategy": "reject"}
         }
-        
+
         template = TemplateSpec.from_dict(data)
         result = template.to_dict()
-        
+
         assert result["id"] == data["id"]
         assert result["duration"]["min_seconds"] == 30
 
 
 class TestTemplateValidator:
     """Test template validation logic."""
-    
+
     @pytest.fixture
     def template(self):
         """Create a test template."""
@@ -107,7 +107,7 @@ class TestTemplateValidator:
             "enforcement": {"strict": True, "violation_strategy": "reject"}
         }
         return TemplateSpec.from_dict(data)
-    
+
     def test_valid_script_passes(self, template):
         """Test that a valid script passes validation."""
         script = {
@@ -119,12 +119,12 @@ class TestTemplateValidator:
                 {'role': 'conclusion', 'duration': 9}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is True
         assert len(result.errors) == 0
-    
+
     def test_duration_too_long_fails(self, template):
         """Test that exceeding max duration fails validation."""
         script = {
@@ -135,13 +135,13 @@ class TestTemplateValidator:
                 {'role': 'argument', 'duration': 85}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert len(result.errors) > 0
         assert "excede el máximo" in result.errors[0]
-    
+
     def test_duration_too_short_fails(self, template):
         """Test that being under min duration fails validation."""
         script = {
@@ -152,12 +152,12 @@ class TestTemplateValidator:
                 {'role': 'argument', 'duration': 10}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "menor al mínimo" in result.errors[0]
-    
+
     def test_duration_above_target_warns(self, template):
         """Test that exceeding target (but not max) produces warning."""
         script = {
@@ -169,13 +169,13 @@ class TestTemplateValidator:
                 {'role': 'conclusion', 'duration': 5}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is True
         assert len(result.warnings) > 0
         assert "supera el objetivo" in result.warnings[0]
-    
+
     def test_wrong_structure_type_fails(self, template):
         """Test that invalid structure type fails."""
         script = {
@@ -186,12 +186,12 @@ class TestTemplateValidator:
                 {'role': 'argument', 'duration': 40}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "no permitido" in result.errors[0]
-    
+
     def test_too_few_beats_fails(self, template):
         """Test that too few beats fails validation."""
         script = {
@@ -202,12 +202,12 @@ class TestTemplateValidator:
                 {'role': 'argument', 'duration': 30}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "menor al mínimo" in result.errors[0]
-    
+
     def test_too_many_beats_fails(self, template):
         """Test that too many beats fails validation."""
         script = {
@@ -222,12 +222,12 @@ class TestTemplateValidator:
                 {'role': 'conclusion', 'duration': 5}
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "excede el máximo" in result.errors[0]
-    
+
     def test_missing_required_role_fails(self, template):
         """Test that missing required role fails validation."""
         script = {
@@ -239,12 +239,12 @@ class TestTemplateValidator:
                 # Missing 'argument' which is required
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "Falta el beat requerido" in result.errors[0]
-    
+
     def test_forbidden_role_fails(self, template):
         """Test that forbidden role fails validation."""
         script = {
@@ -256,16 +256,16 @@ class TestTemplateValidator:
                 {'role': 'call_to_action', 'duration': 10}  # Forbidden
             ]
         }
-        
+
         result = validate_script(script, template)
-        
+
         assert result.passed is False
         assert "prohibido" in result.errors[0]
 
 
 class TestTemplateClient:
     """Test template API client."""
-    
+
     @patch('bot.templates.client.requests.get')
     def test_list_templates_success(self, mock_get):
         """Test fetching template list."""
@@ -278,23 +278,23 @@ class TestTemplateClient:
         }
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
-        
+
         client = TemplateClient()
         templates = client.list_templates()
-        
+
         assert len(templates) == 2
         assert templates[0]['id'] == 'template1'
-    
+
     @patch('bot.templates.client.requests.get')
     def test_list_templates_error(self, mock_get):
         """Test handling error when fetching templates."""
         mock_get.side_effect = Exception("Network error")
-        
+
         client = TemplateClient()
         templates = client.list_templates()
-        
+
         assert templates == []
-    
+
     @patch('bot.templates.client.requests.get')
     def test_get_template_success(self, mock_get):
         """Test fetching specific template."""
@@ -320,14 +320,14 @@ class TestTemplateClient:
         }
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
-        
+
         client = TemplateClient()
         template = client.get_template('test_template')
-        
+
         assert template is not None
         assert template.id == 'test_template'
         assert template.name == 'Test Template'
-    
+
     @patch('bot.templates.client.requests.get')
     def test_get_template_not_found(self, mock_get):
         """Test handling template not found."""
@@ -335,10 +335,10 @@ class TestTemplateClient:
         mock_response.json.return_value = {'success': False}
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
-        
+
         client = TemplateClient()
         template = client.get_template('nonexistent')
-        
+
         assert template is None
 
 
