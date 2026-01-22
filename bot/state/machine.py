@@ -27,6 +27,10 @@ def handle_event(
 ) -> Conversation:
     state = convo.state
 
+    # Allow new voice input to restart flow from any state
+    if event == EventType.VOICE_RECEIVED and state != BotState.IDLE:
+        return Conversation(state=BotState.AUDIO_RECEIVED)
+
     # IDLE
     if state == BotState.IDLE:
         if event == EventType.VOICE_RECEIVED:
