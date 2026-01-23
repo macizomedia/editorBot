@@ -10,19 +10,18 @@ from telegram.ext import (
 from bot.handlers.voice import handle_voice
 from bot.handlers.text import handle_text
 from bot.handlers.callbacks import handle_callback
+from bot.logging import setup_logging
 
 
 def _configure_logging() -> None:
-    level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telegram").setLevel(logging.INFO)
 
 
 def main() -> None:
+    setup_logging()
+    level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    logging.getLogger().setLevel(level)
     _configure_logging()
     logger = logging.getLogger(__name__)
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
