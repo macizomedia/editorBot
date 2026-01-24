@@ -48,11 +48,11 @@ async def build_render_plan(
         logger.error(f"Failed to parse final_script: {e}")
         raise ValueError(f"Invalid script JSON: {e}")
     logger.info(
-        \"render_plan_parsing_complete\",
+        "render_plan_parsing_complete",
         extra={
-            \"script_beats\": len(script_dict.get(\"beats\", [])),
-            \"template_id\": template_id,
-            \"has_soundtrack\": soundtrack_id is not None,
+            "script_beats": len(script_dict.get("beats", [])),
+            "template_id": template_id,
+            "has_soundtrack": soundtrack_id is not None,
         }
     )
     # Step 2: Fetch template specification
@@ -96,14 +96,14 @@ async def build_render_plan(
         # Fail fast on fatal errors
         error_summary = "; ".join([e.message for e in validation_result.fatal_errors])
         logger.error(
-            \"render_plan_validation_failed\",
+            "render_plan_validation_failed",
             extra={
-                \"num_fatal_errors\": len(validation_result.fatal_errors),
-                \"num_warnings\": len(validation_result.warnings),
-                \"error_summary\": error_summary,
+                "num_fatal_errors": len(validation_result.fatal_errors),
+                "num_warnings": len(validation_result.warnings),
+                "error_summary": error_summary,
             }
         )
-                raise ValueError(f"Render plan validation failed: {error_summary}")
+        raise ValueError(f"Render plan validation failed: {error_summary}")
 
     # Log warnings (non-blocking)
     for warning in validation_result.warnings:
