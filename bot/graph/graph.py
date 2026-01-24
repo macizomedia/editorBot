@@ -9,7 +9,18 @@ import logging
 from typing import Literal
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
+
+try:
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    HAS_ASYNC_SQLITE = True
+except (ImportError, ModuleNotFoundError):
+    try:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        HAS_ASYNC_SQLITE = False
+    except (ImportError, ModuleNotFoundError):
+        SqliteSaver = None
+        HAS_ASYNC_SQLITE = False
 
 from .state import GraphState, create_initial_state
 from .nodes import (
@@ -208,23 +219,41 @@ def create_editor_graph() -> StateGraph:
     return workflow
 
 
-async def get_checkpointer() -> AsyncSqliteSaver:
+async def get_checkpointer():
     """
-    Create SQLite checkpointer for persistent state.
+    Create checkpointer for persistent state.
 
-    Stores conversation state in {CHECKPOINT_DB_PATH} (default: /app/data/checkpoints.db)
-    Enables thread resumption across bot restarts.
+    Tries (in order):
+    1. Async SQLite saver (langgraph 0.3+)
+    2. Sync SQLite saver (langgraph 0.2.x)
+    3. Memory saver (fallback, data lost on restart)
     """
     db_path = os.getenv("CHECKPOINT_DB_PATH", "/app/data/checkpoints.db")
-    logger.info(f"[CHECKPOINT] Initializing SQLite checkpointer at {db_path}")
+    logger.info(f"[CHECKPOINT] Initializing checkpointer at {db_path}")
 
     # Ensure directory exists
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-    checkpointer = AsyncSqliteSaver.from_conn_string(db_path)
-    await checkpointer.setup()  # Create tables if not exist
+    if HAS_ASYNC_SQLITE:
+        try:
+            logger.info("[CHECKPOINT] Using AsyncSqliteSaver (langgraph 0.3+)")
+            checkpointer = AsyncSqliteSaver.from_conn_string(db_path)
+            await checkpointer.setup()
+            return checkpointer
+        except Exception as e:
+            logger.warning(f"[CHECKPOINT] AsyncSqliteSaver failed: {e}, falling back")
 
-    return checkpointer
+    if SqliteSaver:
+        try:
+            logger.info("[CHECKPOINT] Using SqliteSaver (langgraph 0.2.x)")
+            checkpointer = SqliteSaver(db_path)
+            return checkpointer
+        except Exception as e:
+            logger.warning(f"[CHECKPOINT] SqliteSaver failed: {e}, falling back")
+
+    # Fallback to memory
+    logger.warning("[CHECKPOINT] Using MemorySaver (data lost on restart!)")
+    return MemorySaver()
 
 
 # ============================================================================
