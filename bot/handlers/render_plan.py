@@ -47,7 +47,14 @@ async def build_render_plan(
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse final_script: {e}")
         raise ValueError(f"Invalid script JSON: {e}")
-
+    logger.info(
+        \"render_plan_parsing_complete\",
+        extra={
+            \"script_beats\": len(script_dict.get(\"beats\", [])),
+            \"template_id\": template_id,
+            \"has_soundtrack\": soundtrack_id is not None,
+        }
+    )
     # Step 2: Fetch template specification
     template_client = TemplateClient()
     try:
@@ -88,7 +95,15 @@ async def build_render_plan(
 
         # Fail fast on fatal errors
         error_summary = "; ".join([e.message for e in validation_result.fatal_errors])
-        raise ValueError(f"Render plan validation failed: {error_summary}")
+        logger.error(
+            \"render_plan_validation_failed\",
+            extra={
+                \"num_fatal_errors\": len(validation_result.fatal_errors),
+                \"num_warnings\": len(validation_result.warnings),
+                \"error_summary\": error_summary,
+            }
+        )
+                raise ValueError(f"Render plan validation failed: {error_summary}")
 
     # Log warnings (non-blocking)
     for warning in validation_result.warnings:

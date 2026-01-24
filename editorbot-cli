@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# EditorBot CLI Wrapper
+#
+# Usage:
+#   ./editorbot-cli --help
+#   ./editorbot-cli --verbose show-state
+#   ./editorbot-cli send-text "test message"
+#
+# To install globally, symlink to your PATH:
+#   ln -s $(pwd)/editorbot-cli ~/.local/bin/editorbot-cli
+#   # or
+#   sudo ln -s $(pwd)/editorbot-cli /usr/local/bin/editorbot-cli
+
+# Get the directory where the REAL script lives (resolve symlinks)
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$( cd "$( dirname "$SCRIPT_PATH" )" && pwd )"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    # Handle relative symlinks
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$( cd "$( dirname "$SCRIPT_PATH" )" && pwd )"
+
+# Find the venv (look in common locations)
+if [ -d "$SCRIPT_DIR/.venv" ]; then
+    VENV_PATH="$SCRIPT_DIR/.venv"
+elif [ -d "$SCRIPT_DIR/../../.venv" ]; then
+    VENV_PATH="$SCRIPT_DIR/../../.venv"
+elif [ -d "$HOME/.venv/editorbot" ]; then
+    VENV_PATH="$HOME/.venv/editorbot"
+else
+    echo "❌ Error: Could not find Python virtual environment"
+    echo "Expected locations:"
+    echo "  - $SCRIPT_DIR/.venv"
+    echo "  - $SCRIPT_DIR/../../.venv"
+    echo "  - $HOME/.venv/editorbot"
+    exit 1
+fi
+
+# Activate venv and run CLI
+source "$VENV_PATH/bin/activate"
+cd "$SCRIPT_DIR"
+python -m bot.cli "$@"

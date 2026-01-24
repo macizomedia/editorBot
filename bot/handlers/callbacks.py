@@ -59,6 +59,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if data.startswith("template:"):
             template_id = data.split(":", 1)[1]
 
+            logger.info(
+                "template_selected",
+                extra={
+                    "chat_id": chat_id,
+                    "template_id": template_id,
+                }
+            )
+
             # Fetch full template specification
             client = TemplateClient()
             template_spec = client.get_template(template_id)
@@ -130,6 +138,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         if data.startswith("music:"):
             soundtrack_id = data.split(":", 1)[1]
+
+            logger.info(
+                "soundtrack_selected",
+                extra={
+                    "chat_id": chat_id,
+                    "soundtrack_id": soundtrack_id,
+                }
+            )
+
             convo = handle_event(convo, EventType.SOUNDTRACK_SELECTED, soundtrack_id)
             save_conversation(chat_id, convo)
 

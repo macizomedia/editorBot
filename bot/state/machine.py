@@ -1,5 +1,8 @@
+import logging
 from enum import Enum
 from .models import BotState, Conversation
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -29,15 +32,51 @@ def handle_event(
 ) -> Conversation:
     state = convo.state
 
+    logger.info(
+        "state_transition_attempt",
+        extra={
+            "current_state": state.value,
+            "event": event.value,
+            "has_payload": payload is not None,
+            "payload_preview": payload[:50] if payload and isinstance(payload, str) else str(type(payload)).__name__,
+        }
+    )
+
     # Allow new voice input to restart flow from any state
     if event == EventType.VOICE_RECEIVED and state != BotState.IDLE:
-        return Conversation(state=BotState.AUDIO_RECEIVED)
+        new_convo = Conversation(state=BotState.AUDIO_RECEIVED)
+        logger.info(
+            "state_transition_complete",
+            extra={
+                "from_state": state.value,
+                "to_state": new_convo.state.value,
+                "event": event.value,
+                "reason": "voice_restart",
+            }
+        )
+        return new_convo
 
     # IDLE
     if state == BotState.IDLE:
         if event == EventType.VOICE_RECEIVED:
-            return Conversation(state=BotState.AUDIO_RECEIVED)
+            new_convo = Conversation(state=BotState.AUDIO_RECEIVED)
+            logger.info(
+                "state_transition_complete",
+                extra={
+                    "from_state": state.value,
+                    "to_state": new_convo.state.value,
+                    "event": event.value,
+                }
+            )
+            return new_convo
 
+        logger.error(
+            "invalid_state_transition",
+            extra={
+                "state": state.value,
+                "event": event.value,
+            }
+        )
         raise InvalidTransition(state, event)
     # AUDIO_RECEIVED
     if state == BotState.AUDIO_RECEIVED:

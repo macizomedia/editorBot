@@ -19,6 +19,18 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     chat_id = update.effective_chat.id
+    voice = update.message.voice
+
+    logger.info(
+        "voice_message_received",
+        extra={
+            "chat_id": chat_id,
+            "duration_seconds": voice.duration,
+            "file_size_bytes": voice.file_size,
+            "mime_type": voice.mime_type,
+        }
+    )
+
     convo = get_conversation(chat_id)
 
     try:
@@ -39,7 +51,21 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # 4. Transcribe
             transcript = transcribe_audio(tmp.name)
 
+            logger.info(
+                "transcription_complete",
+                extra={
+                    "chat_id": chat_id,
+                    "transcript_length": len(transcript),
+                    "transcript_preview": transcript[:100] if transcript else None,
+                    "success": not (transcript.startswith("[Error") or transcript.startswith("[No speech")),
+                }
+            )
+
             if transcript.startswith("[Error") or transcript.startswith("[No speech"):
+                logger.warning(
+                    "transcription_failed",
+                    extra={"chat_id": chat_id, "error": transcript}
+                )
                 save_conversation(chat_id, Conversation())
                 await update.message.reply_text(
                     "⚠️ No pude transcribir el audio. Intenta nuevamente."
@@ -52,6 +78,16 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # 5. Mediate
         mediated = mediate_text(transcript)
+
+        logger.info(
+            "mediation_complete",
+            extra={
+                "chat_id": chat_id,
+                "original_length": len(transcript),
+                "mediated_length": len(mediated),
+                "mediated_preview": mediated[:100] if mediated else None,
+            }
+        )
 
         # 6. FSM: mediated text ready
         convo = handle_event(convo, EventType.TEXT_RECEIVED, mediated)

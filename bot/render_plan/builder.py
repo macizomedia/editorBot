@@ -26,6 +26,7 @@ The builder translates creative intent into precise rendering instructions.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Dict, Any, List, Tuple
 
@@ -41,6 +42,8 @@ from .models import (
     SubtitleSegment,
     Output,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RenderPlanBuilder:
@@ -79,6 +82,15 @@ class RenderPlanBuilder:
         Inputs are dicts (not domain objects) to avoid coupling to upstream layers.
         Builder extracts only what it needs.
         """
+
+        logger.info(
+            "render_plan_build_started",
+            extra={
+                "num_beats": len(script.get("beats", [])),
+                "template_id": template.get("id", "unknown") if isinstance(template, dict) else getattr(template, "id", "unknown"),
+                "has_soundtrack": visual_strategy.get("soundtrack_id") is not None,
+            }
+        )
 
         # Step 1: Generate unique identifier
         render_plan_id = self._generate_plan_id()
@@ -119,7 +131,7 @@ class RenderPlanBuilder:
         )
 
         # Step 8: Assemble final RenderPlan
-        return RenderPlan(
+        render_plan = RenderPlan(
             render_plan_id=render_plan_id,
             format=video_format,
             total_duration_seconds=total_duration,
@@ -130,6 +142,20 @@ class RenderPlanBuilder:
             subtitles=subtitles,
             output=output,
         )
+
+        logger.info(
+            "render_plan_build_complete",
+            extra={
+                "render_plan_id": render_plan_id,
+                "total_duration": total_duration,
+                "num_scenes": len(scenes),
+                "num_audio_tracks": len(audio_tracks),
+                "resolution": f"{resolution.width}x{resolution.height}",
+                "fps": fps,
+            }
+        )
+
+        return render_plan
 
     def _generate_plan_id(self) -> str:
         """
