@@ -50,8 +50,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             elif convo.state == BotState.FINAL_SCRIPT:
                 convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
-                # Templates already selected, move to next step
-                await update.message.reply_text("✅ Script finalizado. Continuamos.")
+                # After COMMAND_NEXT, should be in TEMPLATE_PROPOSED, send templates
+                logger.info(f"After COMMAND_NEXT, state is: {convo.state}")
+                if convo.state == BotState.TEMPLATE_PROPOSED:
+                    logger.info(f"Showing template selection for chat {chat_id}")
+                    await send_template_selection(chat_id, context)
+                    return
+                else:
+                    await update.message.reply_text("✅ Script finalizado. Continuamos.")
             else:
                 await update.message.reply_text("✅ Texto confirmado. Continuamos.")
 
@@ -69,7 +75,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         elif text.upper() == "NEXT":
             convo = handle_event(convo, EventType.COMMAND_NEXT)
-            await update.message.reply_text("Continuamos al siguiente paso.")
+            save_conversation(chat_id, convo)
+            # If transitioning to TEMPLATE_PROPOSED, show templates
+            if convo.state == BotState.TEMPLATE_PROPOSED:
+                logger.info(f"Showing template selection for chat {chat_id} after NEXT command")
+                await send_template_selection(chat_id, context)
+                return
+            else:
+                await update.message.reply_text("Continuamos al siguiente paso.")
 
 
         else:
@@ -88,10 +101,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "- CANCELAR"
                 )
             elif convo.state == BotState.FINAL_SCRIPT:
-                convo = handle_event(convo, EventType.COMMAND_NEXT)
+                # Already in FINAL_SCRIPT after editing, now transition to TEMPLATE_PROPOSED
+                convo = handle_event(convo, EventType.COMMAND_OK)
                 save_conversation(chat_id, convo)
-                # Use new template API to fetch and display templates
-                await send_template_selection(chat_id, context)
+                if convo.state == BotState.TEMPLATE_PROPOSED:
+                    logger.info(f"Showing template selection for chat {chat_id} after script finalized")
+                    await send_template_selection(chat_id, context)
+                else:
+                    await update.message.reply_text("✅ Script finalizado. Continuamos.")
             else:
                 await update.message.reply_text(
                     "✍️ Texto recibido.\nPuedes editarlo o responder OK."
