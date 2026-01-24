@@ -17,6 +17,7 @@ class BotState(Enum):
     TEMPLATE_PROPOSED = "template_proposed"
     SELECT_SOUNDTRACK = "select_soundtrack"
     ASSET_OPTIONS = "asset_options"
+    RENDER_PLAN_GENERATED = "render_plan_generated"
     READY_FOR_RENDER = "ready_for_render"
 
 
@@ -36,3 +37,7 @@ class Conversation:
     # Asset selection
     soundtrack_id: Optional[str] = None
     asset_config: Optional[Dict[str, Any]] = None  # Image generation config
+
+    # Render Plan (final video specification)
+    visual_strategy: Optional[Dict[str, Any]] = None  # Visual generation strategy
+    render_plan: Optional[Dict[str, Any]] = None  # Serialized RenderPlan ready for render engine

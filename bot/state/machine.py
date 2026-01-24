@@ -13,6 +13,8 @@ class EventType(Enum):
     TEMPLATE_SELECTED = "template_selected"
     SOUNDTRACK_SELECTED = "soundtrack_selected"
     ASSETS_CONFIGURED = "assets_configured"
+    RENDER_PLAN_BUILT = "render_plan_built"
+    RENDER_PLAN_VALIDATED = "render_plan_validated"
     RENDER_APPROVED = "render_approved"
 
 
@@ -195,6 +197,25 @@ def handle_event(
     if state == BotState.ASSET_OPTIONS:
         if event == EventType.ASSETS_CONFIGURED:
             return Conversation(
+                state=BotState.RENDER_PLAN_GENERATED,
+                transcript=convo.transcript,
+                mediated_text=convo.mediated_text,
+                script_draft=convo.script_draft,
+                final_script=convo.final_script,
+                template_id=convo.template_id,
+                soundtrack_id=convo.soundtrack_id,
+                asset_config=payload,
+            )
+        if event == EventType.COMMAND_CANCELAR:
+            return Conversation(state=BotState.IDLE)
+
+        raise InvalidTransition(state, event)
+
+    # RENDER_PLAN_GENERATED
+    if state == BotState.RENDER_PLAN_GENERATED:
+        if event == EventType.RENDER_PLAN_BUILT:
+            # Render plan has been built and validated
+            return Conversation(
                 state=BotState.READY_FOR_RENDER,
                 transcript=convo.transcript,
                 mediated_text=convo.mediated_text,
@@ -202,6 +223,9 @@ def handle_event(
                 final_script=convo.final_script,
                 template_id=convo.template_id,
                 soundtrack_id=convo.soundtrack_id,
+                asset_config=convo.asset_config,
+                visual_strategy=convo.visual_strategy,
+                render_plan=payload,  # Serialized RenderPlan JSON
             )
         if event == EventType.COMMAND_CANCELAR:
             return Conversation(state=BotState.IDLE)

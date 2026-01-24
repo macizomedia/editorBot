@@ -10,6 +10,7 @@ from bot.state.runtime import get_conversation, save_conversation
 from bot.templates.client import TemplateClient
 from bot.templates.validator import validate_script
 from bot.templates.models import TemplateSpec
+from bot.handlers.render_plan import build_render_plan, format_render_plan_summary
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +132,53 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             soundtrack_id = data.split(":", 1)[1]
             convo = handle_event(convo, EventType.SOUNDTRACK_SELECTED, soundtrack_id)
             save_conversation(chat_id, convo)
-            await query.message.reply_text(
-                "✅ Selección guardada. Listo para pasar a la etapa de video."
-            )
+
+            # Trigger asset configuration (for now, use default config)
+            default_asset_config = {
+                "visual_prompts": {},
+                "style_preset": "cinematic"
+            }
+            convo = handle_event(convo, EventType.ASSETS_CONFIGURED, default_asset_config)
+            save_conversation(chat_id, convo)
+
+            # Build render plan
+            await query.message.reply_text("⚙️ Generando plan de render...")
+
+            try:
+                # Assume audio is stored in S3 or local path (placeholder for now)
+                audio_source = f"s3://content-pipeline/audio/{chat_id}/narration.wav"
+
+                render_plan_json = await build_render_plan(
+                    final_script=convo.final_script,
+                    template_id=convo.template_id,
+                    soundtrack_id=soundtrack_id if soundtrack_id != "none" else None,
+                    asset_config=default_asset_config,
+                    audio_source=audio_source,
+                )
+
+                # Save to conversation state
+                convo = handle_event(convo, EventType.RENDER_PLAN_BUILT, render_plan_json)
+                convo.visual_strategy = {
+                    "soundtrack_id": soundtrack_id,
+                    "visual_prompts": default_asset_config.get("visual_prompts", {}),
+                    "style_preset": default_asset_config.get("style_preset"),
+                }
+                save_conversation(chat_id, convo)
+
+                # Send summary
+                summary = format_render_plan_summary(render_plan_json)
+                await query.message.reply_text(summary, parse_mode="Markdown")
+
+            except ValueError as e:
+                logger.error(f"Render plan generation failed: {e}")
+                await query.message.reply_text(
+                    f"❌ Error generando render plan: {e}\n\n"
+                    "Por favor revisa el guión y template e intenta de nuevo."
+                )
+            except Exception:
+                logger.exception("Unexpected error building render plan")
+                await query.message.reply_text("⚠️ Error inesperado. Intenta de nuevo.")
+
             return
 
     except Exception:
