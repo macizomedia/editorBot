@@ -24,14 +24,14 @@ def save_audio_to_s3(local_path: str, chat_id: int) -> str:
     try:
         s3_client = boto3.client("s3")
         s3_key = f"{S3_AUDIO_PREFIX}/{chat_id}/narration.wav"
-        
+
         s3_client.upload_file(
             local_path,
             S3_BUCKET,
             s3_key,
             ExtraArgs={"ContentType": "audio/wav"}
         )
-        
+
         s3_path = f"s3://{S3_BUCKET}/{s3_key}"
         logger.info(
             "audio_saved_to_s3",
