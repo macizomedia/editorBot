@@ -62,9 +62,10 @@ class MockFile:
     file_path: str
 
     async def download_to_drive(self, custom_path: str) -> str:
-        """Mock file download."""
-        # In real implementation, this would download the file
-        # For CLI, we assume file is already local
+        """Mock file download - copy source file to destination."""
+        import shutil
+        # Copy the source file (file_path) to the destination (custom_path)
+        shutil.copy2(self.file_path, custom_path)
         return custom_path
 
 
@@ -132,10 +133,13 @@ class MockUpdate:
         return None
 
 
-@dataclass
 class MockBot:
     """Mock Telegram Bot object."""
-    username: str = "editorbot_cli"
+
+    def __init__(self, simulator=None):
+        """Initialize mock bot with optional simulator reference."""
+        self.username = "editorbot_cli"
+        self.simulator = simulator
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> MockMessage:
         """Mock send message."""
@@ -149,11 +153,17 @@ class MockBot:
 
     async def get_file(self, file_id: str) -> MockFile:
         """Mock get file."""
+        # Look up actual path from simulator if available
+        if self.simulator and file_id in self.simulator.file_paths:
+            actual_path = self.simulator.file_paths[file_id]
+        else:
+            actual_path = f"/tmp/{file_id}"
+
         return MockFile(
             file_id=file_id,
             file_unique_id=f"unique_{file_id}",
             file_size=1024,
-            file_path=f"/tmp/{file_id}",
+            file_path=actual_path,
         )
 
 
@@ -174,8 +184,8 @@ class MockContext:
     application: MockApplication
     bot: MockBot
 
-    def __init__(self):
-        self.bot = MockBot()
+    def __init__(self, simulator=None):
+        self.bot = MockBot(simulator=simulator)
         self.application = MockApplication(bot=self.bot)
 
 
@@ -189,6 +199,7 @@ class TelegramSimulator:
         self.user = MockUser(id=chat_id)
         self.chat = MockChat(id=chat_id)
         self.message_counter = 1000
+        self.file_paths = {}  # Store file_id -> actual_path mapping
 
     def create_voice_update(self, file_path: str, duration: int = 3) -> MockUpdate:
         """
@@ -201,8 +212,13 @@ class TelegramSimulator:
         Returns:
             MockUpdate with voice message
         """
+        file_id = f"voice_{self.message_counter}"
+
+        # Store the actual file path for this file_id
+        self.file_paths[file_id] = file_path
+
         voice = MockVoice(
-            file_id=f"voice_{self.message_counter}",
+            file_id=file_id,
             file_unique_id=f"unique_{self.message_counter}",
             duration=duration,
             file_size=1024 * 50,  # ~50KB
@@ -286,6 +302,6 @@ class TelegramSimulator:
         Create mock Context object.
 
         Returns:
-            MockContext with bot instance
+            MockContext with bot instance and simulator reference
         """
-        return MockContext()
+        return MockContext(simulator=self)

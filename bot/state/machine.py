@@ -38,7 +38,7 @@ def handle_event(
             "current_state": state.value,
             "event": event.value,
             "has_payload": payload is not None,
-            "payload_preview": payload[:50] if payload and isinstance(payload, str) else str(type(payload)).__name__,
+            "payload_preview": payload[:50] if payload and isinstance(payload, str) else type(payload).__name__,
         }
     )
 

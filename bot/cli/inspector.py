@@ -83,8 +83,9 @@ class StateInspector:
             lines.append("─" * 44)
             lines.append("VERBOSE MODE - All Fields:")
             lines.append("─" * 44)
-            # Show all fields including None
-            for key, value in convo.__dict__.items():
+            # Show all fields including None (handle slots=True dataclass)
+            convo_dict = asdict(convo) if hasattr(convo, '__dataclass_fields__') else convo.__dict__
+            for key, value in convo_dict.items():
                 if value is not None:
                     lines.append(f"{key}: {StateInspector._truncate(str(value), 80)}")
                 else:
@@ -104,9 +105,11 @@ class StateInspector:
         Returns:
             Formatted JSON string
         """
-        if hasattr(data, '__dict__'):
-            # Convert dataclass or object to dict
-            data = asdict(data) if hasattr(data, '__dataclass_fields__') else data.__dict__
+        # Convert dataclass to dict (handles slots=True)
+        if hasattr(data, '__dataclass_fields__'):
+            data = asdict(data)
+        elif hasattr(data, '__dict__'):
+            data = data.__dict__
 
         try:
             return json.dumps(data, indent=indent, ensure_ascii=False, default=str)
