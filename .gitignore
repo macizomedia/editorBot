@@ -10,3 +10,9 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+
+# LangGraph checkpoints (SQLite database)
+data/
+*.db
+*.db-shm
+*.db-wal

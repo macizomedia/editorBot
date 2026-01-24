@@ -13,9 +13,12 @@ services:
       - WHISPER_LANG=${WHISPER_LANG:-es}
       - TEMPLATE_API_URL=${TEMPLATE_API_URL:-https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/secure/google-credentials.json}
+      - LANGGRAPH_ROLLOUT_PCT=${LANGGRAPH_ROLLOUT_PCT:-0}
+      - CHECKPOINT_DB_PATH=${CHECKPOINT_DB_PATH:-/app/data/checkpoints.db}
       - PYTHONUNBUFFERED=1
     volumes:
       - ../secure:/app/secure:ro
+      - ./data:/app/data:rw
     healthcheck:
       test: [ "CMD", "python", "-c", "import bot" ]
       interval: 30s

@@ -10,6 +10,7 @@ from telegram.ext import (
 from bot.handlers.voice import handle_voice
 from bot.handlers.text import handle_text
 from bot.handlers.callbacks import handle_callback
+from bot.handlers.commands import get_command_handlers
 from bot.logging import setup_logging
 
 
@@ -30,6 +31,11 @@ def main() -> None:
 
     app = ApplicationBuilder().token(token).build()
 
+    # Register LangGraph command handlers
+    for handler in get_command_handlers():
+        app.add_handler(handler)
+
+    # Register legacy handlers
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
