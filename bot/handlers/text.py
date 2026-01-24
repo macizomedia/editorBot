@@ -31,8 +31,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
             if convo.state == BotState.TEMPLATE_PROPOSED:
                 save_conversation(chat_id, convo)
+                logger.info(f"Showing template selection for chat {chat_id}")
                 # Show template selection buttons
                 await send_template_selection(chat_id, context)
+                return  # Don't send generic confirmation
             elif convo.state == BotState.SCRIPT_DRAFTED:
                 script_draft = generate_script(convo.mediated_text or "")
                 convo.script_draft = script_draft

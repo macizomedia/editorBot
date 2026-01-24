@@ -221,10 +221,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def send_template_selection(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send template selection keyboard to user."""
     try:
+        logger.info(f"Fetching templates for chat {chat_id}")
         client = TemplateClient()
         templates = client.list_templates()
+        logger.info(f"Retrieved {len(templates)} templates for chat {chat_id}")
 
         if not templates:
+            logger.warning(f"No templates available for chat {chat_id}")
             await context.bot.send_message(
                 chat_id=chat_id,
                 text="❌ No se pudieron cargar los templates. Intenta más tarde."
@@ -232,13 +235,15 @@ async def send_template_selection(chat_id: int, context: ContextTypes.DEFAULT_TY
             return
 
         keyboard = _build_template_keyboard(templates)
+        logger.info(f"Sending template keyboard with {len(templates)} options to chat {chat_id}")
         await context.bot.send_message(
             chat_id=chat_id,
             text="✅ Guion final confirmado. Ahora elige un template:",
             reply_markup=keyboard
         )
+        logger.info(f"Template selection sent successfully to chat {chat_id}")
     except Exception:
-        logger.exception("Error sending template selection")
+        logger.exception(f"Error sending template selection to chat {chat_id}")
         await context.bot.send_message(
             chat_id=chat_id,
             text="⚠️ Error al cargar templates. Intenta de nuevo."
