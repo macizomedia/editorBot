@@ -38,6 +38,7 @@ class VisualRules:
     """Visual requirements for a template."""
     visual_strategy: str  # "subtitles_only" | "slides" | "mixed" | "optional"
     visuals_required: bool
+    visual_recommendations: Optional[List[str]] = None  # e.g. ["bold text", "minimal slides"]
 
 
 @dataclass
@@ -45,6 +46,7 @@ class Enforcement:
     """Enforcement policy for template validation."""
     strict: bool
     violation_strategy: str  # "reject" | "suggest_adjustments"
+    strict_rules: Optional[List[str]] = None  # e.g. ["must_end_with_question"]
 
 
 @dataclass

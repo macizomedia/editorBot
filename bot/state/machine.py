@@ -92,7 +92,8 @@ def handle_event(
         if event == EventType.TEXT_RECEIVED:
             return Conversation(
                 state=BotState.MEDIATED,
-                transcript=payload,
+                transcript=convo.transcript,
+                mediated_text=payload,
             )
 
         raise InvalidTransition(state, event)
