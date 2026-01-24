@@ -2,4 +2,4 @@ python-telegram-bot>=21.0
 pydub>=0.25.1
 google-genai>=0.6.0
 ffmpeg-python>=0.2.0
-requests>=2.31.0
+requests>=2.31.0boto3>=1.26.0
