@@ -30,6 +30,7 @@ class AudioRules:
     """Audio requirements for a template."""
     voice_policy: str  # "required" | "optional" | "forbidden"
     music_allowed: bool
+    music_recommendations: Optional[List[str]] = None  # e.g. ["suspenseful", "minimal"]
 
 
 @dataclass
