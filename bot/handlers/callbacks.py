@@ -68,11 +68,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
             # Fetch full template specification
-            client = TemplateClient()
-            template_spec = client.get_template(template_id)
+            try:
+                client = TemplateClient()
+                template_spec = client.get_template(template_id)
+            except Exception as e:
+                logger.exception(f"Failed to fetch template {template_id}")
+                await query.message.reply_text(f"❌ Error al cargar template: {str(e)}")
+                return
 
             if not template_spec:
-                await query.message.reply_text("❌ Error al cargar template. Intenta de nuevo.")
+                logger.error(f"Template {template_id} not found")
+                await query.message.reply_text("❌ Template no encontrado. Intenta de nuevo.")
                 return
 
             # Validate script against template

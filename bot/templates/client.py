@@ -3,9 +3,12 @@ Template API client for fetching templates from Lambda.
 """
 
 import os
+import logging
 import requests
 from typing import List, Optional, Dict
 from .models import TemplateSpec
+
+logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.environ.get(
     'TEMPLATE_API_URL',
@@ -35,15 +38,16 @@ class TemplateClient:
             List of template summary dictionaries
         """
         try:
-            response = requests.get(
-                f"{self.base_url}/templates",
-                timeout=self.timeout
-            )
+            url = f"{self.base_url}/templates"
+            logger.info(f"Fetching templates from {url}")
+            response = requests.get(url, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
-            return data.get('templates', [])
+            templates = data.get('templates', [])
+            logger.info(f"Successfully fetched {len(templates)} templates")
+            return templates
         except requests.RequestException as e:
-            print(f"Error fetching templates: {e}")
+            logger.exception(f"Error fetching templates from {self.base_url}: {e}")
             return []
 
     def get_template(self, template_id: str) -> Optional[TemplateSpec]:
@@ -57,17 +61,30 @@ class TemplateClient:
             TemplateSpec object or None if error
         """
         try:
-            response = requests.get(
-                f"{self.base_url}/templates/{template_id}",
-                timeout=self.timeout
-            )
+            url = f"{self.base_url}/templates/{template_id}"
+            logger.info(f"Fetching template {template_id} from {url}")
+            response = requests.get(url, timeout=self.timeout)
+
+            logger.debug(f"API response status: {response.status_code}")
             response.raise_for_status()
+
             data = response.json()
+            logger.debug(f"API response data keys: {list(data.keys())}")
 
             if data.get('success'):
-                return TemplateSpec.from_dict(data['template'])
-            return None
+                template = TemplateSpec.from_dict(data['template'])
+                logger.info(f"Successfully loaded template {template_id}")
+                return template
+            else:
+                logger.error(f"API returned success=false for template {template_id}: {data}")
+                return None
 
         except requests.RequestException as e:
-            print(f"Error fetching template {template_id}: {e}")
+            logger.exception(f"Request error fetching template {template_id}: {e}")
+            return None
+        except KeyError as e:
+            logger.exception(f"Missing key in template response for {template_id}: {e}")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error parsing template {template_id}: {e}")
             return None
