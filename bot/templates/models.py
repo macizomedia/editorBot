@@ -50,9 +50,11 @@ class Enforcement:
 class TemplateSpec:
     """Complete template specification."""
     id: str
+    template_family: str  # "opinion" | "explainer" | "essay" | "story" | "prompt"
     name: str
     description: str
     intent_profile: str
+    audience_relationship: str  # e.g. "speaker_to_audience", "guide_to_learner"
     allowed_formats: List[str]
     duration: Duration
     script_structure: ScriptStructure
@@ -65,9 +67,11 @@ class TemplateSpec:
         """Create TemplateSpec from JSON data."""
         return cls(
             id=data['id'],
+            template_family=data['template_family'],
             name=data['name'],
             description=data['description'],
             intent_profile=data['intent_profile'],
+            audience_relationship=data['audience_relationship'],
             allowed_formats=data['allowed_formats'],
             duration=Duration(**data['duration']),
             script_structure=ScriptStructure(**data['script_structure']),
@@ -80,9 +84,11 @@ class TemplateSpec:
         """Convert TemplateSpec to dictionary for storage."""
         return {
             'id': self.id,
+            'template_family': self.template_family,
             'name': self.name,
             'description': self.description,
             'intent_profile': self.intent_profile,
+            'audience_relationship': self.audience_relationship,
             'allowed_formats': self.allowed_formats,
             'duration': {
                 'min_seconds': self.duration.min_seconds,

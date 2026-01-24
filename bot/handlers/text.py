@@ -29,7 +29,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if text.upper() == "OK":
             convo = handle_event(convo, EventType.COMMAND_OK)
 
-            if convo.state == BotState.SCRIPT_DRAFTED:
+            if convo.state == BotState.TEMPLATE_PROPOSED:
+                save_conversation(chat_id, convo)
+                # Show template selection buttons
+                await send_template_selection(chat_id, context)
+            elif convo.state == BotState.SCRIPT_DRAFTED:
                 script_draft = generate_script(convo.mediated_text or "")
                 convo.script_draft = script_draft
                 save_conversation(chat_id, convo)
@@ -44,11 +48,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             elif convo.state == BotState.FINAL_SCRIPT:
                 convo = handle_event(convo, EventType.COMMAND_NEXT)
                 save_conversation(chat_id, convo)
-                # Use new template API to fetch and display templates
-                await send_template_selection(chat_id, context)
-            elif convo.state == BotState.TEMPLATE_PROPOSED:
-                save_conversation(chat_id, convo)
-                await update.message.reply_text("Selecciona un template con los botones.")
+                # Templates already selected, move to next step
+                await update.message.reply_text("✅ Script finalizado. Continuamos.")
             else:
                 await update.message.reply_text("✅ Texto confirmado. Continuamos.")
 

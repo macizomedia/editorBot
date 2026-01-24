@@ -107,10 +107,9 @@ def handle_event(
             )
         if event == EventType.COMMAND_OK:
             return Conversation(
-                state=BotState.SCRIPT_DRAFTED,
+                state=BotState.TEMPLATE_PROPOSED,
                 transcript=convo.transcript,
                 mediated_text=convo.transcript,  # Copy mediated text from transcript
-                script_draft=None,
             )
         if event == EventType.COMMAND_EDITAR:
             return Conversation(
@@ -203,11 +202,9 @@ def handle_event(
     if state == BotState.TEMPLATE_PROPOSED:
         if event == EventType.TEMPLATE_SELECTED:
             return Conversation(
-                state=BotState.SELECT_SOUNDTRACK,
+                state=BotState.SCRIPT_DRAFTED,
                 transcript=convo.transcript,
                 mediated_text=convo.mediated_text,
-                script_draft=convo.script_draft,
-                final_script=convo.final_script,
                 template_id=payload,
             )
         if event == EventType.COMMAND_CANCELAR:
