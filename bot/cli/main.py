@@ -48,23 +48,25 @@ Examples:
   python -m bot.cli show-state
   python -m bot.cli show-state --json
   python -m bot.cli reset
+  python -m bot.cli inject-transcript "Hello world"
 
 Interactive Commands:
-  voice <path>     - Send voice message
-  text <message>   - Send text message
-  click <data>     - Click inline button
-  state            - Show conversation state
-  state --json     - Show state as JSON
-  log on/off       - Toggle verbose logging
-  reset            - Reset to IDLE
-  exit             - Quit
+  voice <path>        - Send voice message
+  inject <text>       - Inject mock transcript (bypass Whisper)
+  text <message>      - Send text message
+  click <data>        - Click inline button
+  state               - Show conversation state
+  state --json        - Show state as JSON
+  log on/off          - Toggle verbose logging
+  reset               - Reset to IDLE
+  exit                - Quit
         """
     )
 
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["send-voice", "send-text", "click", "show-state", "reset"],
+        choices=["send-voice", "inject-transcript", "send-text", "click", "show-state", "reset"],
         help="Command to execute (omit for interactive mode)"
     )
     parser.add_argument(
@@ -108,6 +110,14 @@ Interactive Commands:
             print("Usage: python -m bot.cli send-voice <path>")
             sys.exit(1)
         await cli.send_voice(args.args[0])
+
+    elif args.command == "inject-transcript":
+        if not args.args:
+            print("❌ Error: Missing transcript text")
+            print("Usage: python -m bot.cli inject-transcript <text>")
+            sys.exit(1)
+        transcript = " ".join(args.args)
+        await cli.inject_transcript(transcript)
 
     elif args.command == "send-text":
         if not args.args:

@@ -75,6 +75,72 @@ class CLICommands:
         if self.verbose and convo.transcript:
             print_json({"transcript": convo.transcript}, "Transcript JSON")
 
+    async def inject_transcript(self, transcript: str) -> None:
+        """
+        Inject mock transcript directly (bypasses transcription).
+
+        Useful for testing when Whisper is unavailable.
+
+        Args:
+            transcript: Text to use as transcript
+        """
+        from bot.state.machine import handle_event, EventType
+        from bot.services.mediation import mediate_text
+
+        print(f"💉 Injecting mock transcript: {transcript[:50]}...")
+
+        convo = get_conversation(self.chat_id)
+
+        # Log initial state
+        if self.verbose:
+            print_separator("BEFORE INJECTION")
+            print(self.inspector.format_conversation(convo))
+
+        print_separator("PROCESSING")
+
+        # Step 1: Transition to AUDIO_RECEIVED
+        convo = handle_event(convo, EventType.VOICE_RECEIVED)
+        save_conversation(self.chat_id, convo)
+        print("✅ State: AUDIO_RECEIVED")
+
+        # Step 2: Add transcript and transition
+        convo = handle_event(convo, EventType.TRANSCRIPTION_COMPLETE, transcript)
+        save_conversation(self.chat_id, convo)
+        print(f"✅ Transcript injected: {transcript[:100]}")
+
+        # Step 3: Mediate
+        print("🔄 Mediating text...")
+        try:
+            mediated = mediate_text(transcript)
+        except RuntimeError as e:
+            # If Gemini API key missing, use mock mediation
+            if "GEMINI_API_KEY" in str(e):
+                print(f"⚠️  {e}")
+                print("📝 Using mock mediation (no LLM)")
+                mediated = f"[MOCK MEDIATION] {transcript}"
+            else:
+                raise
+        print(f"✅ Mediated: {mediated[:100]}")
+
+        # Step 4: Transition to TEXT_RECEIVED
+        convo = handle_event(convo, EventType.TEXT_RECEIVED, mediated)
+        save_conversation(self.chat_id, convo)
+        print("✅ State: TEXT_RECEIVED")
+
+        # Show user message
+        print("\n🤖 Bot Message:")
+        print("✍️ Texto mediado (borrador):\n")
+        print(f"{mediated}\n")
+        print("Responde con:")
+        print("- OK")
+        print("- EDITAR (pegando texto)")
+        print("- CANCELAR")
+
+        # Log final state
+        print_separator("AFTER INJECTION")
+        convo = get_conversation(self.chat_id)
+        print(self.inspector.format_conversation(convo, verbose=self.verbose))
+
     async def send_text(self, message: str) -> None:
         """
         Simulate sending a text message.
@@ -200,6 +266,7 @@ class CLICommands:
         print(f"Verbose: {'ON' if self.verbose else 'OFF'}")
         print("\nCommands:")
         print("  voice <path>     - Send voice message")
+        print("  inject <text>    - Inject mock transcript (bypass Whisper)")
         print("  text <message>   - Send text message")
         print("  click <data>     - Click inline button")
         print("  state            - Show conversation state")
@@ -236,6 +303,11 @@ class CLICommands:
                         print("❌ Usage: voice <path>")
                         continue
                     await self.send_voice(args)
+                elif command == "inject":
+                    if not args:
+                        print("❌ Usage: inject <text>")
+                        continue
+                    await self.inject_transcript(args)
                 elif command == "text":
                     if not args:
                         print("❌ Usage: text <message>")

@@ -109,7 +109,7 @@ def handle_event(
             return Conversation(
                 state=BotState.SCRIPT_DRAFTED,
                 transcript=convo.transcript,
-                mediated_text=convo.mediated_text,
+                mediated_text=convo.transcript,  # Copy mediated text from transcript
                 script_draft=None,
             )
         if event == EventType.COMMAND_EDITAR:
