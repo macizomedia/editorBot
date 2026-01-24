@@ -28,6 +28,7 @@ class Conversation:
     mediated_text: Optional[str] = None
     script_draft: Optional[str] = None
     final_script: Optional[str] = None
+    audio_s3_path: Optional[str] = None  # S3 path to original voice audio
 
     # Template system
     template_id: Optional[str] = None

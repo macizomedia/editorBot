@@ -1,5 +1,7 @@
 import logging
 import tempfile
+import boto3
+from botocore.exceptions import ClientError
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -11,6 +13,37 @@ from bot.services.transcription import transcribe_audio
 from bot.services.mediation import mediate_text
 
 logger = logging.getLogger(__name__)
+
+# S3 configuration
+S3_BUCKET = "content-pipeline"
+S3_AUDIO_PREFIX = "audio"
+
+
+def save_audio_to_s3(local_path: str, chat_id: int) -> str:
+    """Save audio file to S3 and return the S3 path."""
+    try:
+        s3_client = boto3.client("s3")
+        s3_key = f"{S3_AUDIO_PREFIX}/{chat_id}/narration.wav"
+        
+        s3_client.upload_file(
+            local_path,
+            S3_BUCKET,
+            s3_key,
+            ExtraArgs={"ContentType": "audio/wav"}
+        )
+        
+        s3_path = f"s3://{S3_BUCKET}/{s3_key}"
+        logger.info(
+            "audio_saved_to_s3",
+            extra={
+                "chat_id": chat_id,
+                "s3_path": s3_path,
+            }
+        )
+        return s3_path
+    except ClientError as e:
+        logger.exception(f"Failed to save audio to S3 for chat {chat_id}: {e}")
+        raise
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -48,6 +81,11 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         with tempfile.NamedTemporaryFile(suffix=".ogg") as tmp:
             await file.download_to_drive(tmp.name)
 
+            # Convert to WAV for consistency (rename since we already have .ogg)
+            wav_path = tmp.name.replace(".ogg", ".wav")
+            import shutil
+            shutil.copy(tmp.name, wav_path)
+
             # 4. Transcribe
             transcript = transcribe_audio(tmp.name)
 
@@ -71,6 +109,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "⚠️ No pude transcribir el audio. Intenta nuevamente."
                 )
                 return
+
+            # 4b. Save audio to S3 for later use in render plan
+            try:
+                audio_s3_path = save_audio_to_s3(wav_path, chat_id)
+                convo.audio_s3_path = audio_s3_path
+            except Exception as e:
+                logger.warning(f"Failed to save audio to S3, but continuing: {e}")
 
         # 5. FSM: transcription complete
         convo = handle_event(convo, EventType.TRANSCRIPTION_COMPLETE, transcript)

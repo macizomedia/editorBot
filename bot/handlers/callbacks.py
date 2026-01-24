@@ -172,15 +172,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.message.reply_text("⚙️ Generando plan de render...")
 
             try:
-                # Assume audio is stored in S3 or local path (placeholder for now)
-                audio_source = f"s3://content-pipeline/audio/{chat_id}/narration.wav"
+                # Use audio path from conversation (saved when voice was processed)
+                if not convo.audio_s3_path:
+                    logger.error("Audio S3 path not available in conversation")
+                    await query.message.reply_text(
+                        "❌ Error: Archivo de audio no disponible. Intenta de nuevo."
+                    )
+                    return
 
                 render_plan_json = await build_render_plan(
                     final_script=convo.final_script,
                     template_id=convo.template_id,
                     soundtrack_id=soundtrack_id if soundtrack_id != "none" else None,
                     asset_config=default_asset_config,
-                    audio_source=audio_source,
+                    audio_source=convo.audio_s3_path,
                 )
 
                 # Save to conversation state
