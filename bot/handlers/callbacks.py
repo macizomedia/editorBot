@@ -6,6 +6,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import ContextTypes
 
 from bot.state.machine import handle_event, EventType
+from bot.state.models import BotState
 from bot.state.runtime import get_conversation, save_conversation
 from bot.templates.client import TemplateClient
 from bot.templates.validator import validate_script
@@ -131,9 +132,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     success_msg += "Tu guión cumple con todos los requisitos.\n"
                 success_msg += "\nAhora elige una banda sonora..."
 
-            # Update conversation
+            # Update conversation - transition to SELECT_SOUNDTRACK state
             convo = handle_event(convo, EventType.TEMPLATE_SELECTED, template_id)
             convo.template_spec = template_spec.to_dict()
+
+            # Add explicit state transition to SELECT_SOUNDTRACK before sending keyboard
+            convo.state = BotState.SELECT_SOUNDTRACK
             save_conversation(chat_id, convo)
 
             await query.message.reply_text(
