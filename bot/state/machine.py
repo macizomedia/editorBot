@@ -70,6 +70,23 @@ def handle_event(
             )
             return new_convo
 
+        # Allow text input to start conversation (for CLI testing and text-only flows)
+        if event == EventType.TEXT_RECEIVED:
+            new_convo = Conversation(
+                state=BotState.TRANSCRIBED,
+                transcript=payload,  # Use text directly as transcript
+            )
+            logger.info(
+                "state_transition_complete",
+                extra={
+                    "from_state": state.value,
+                    "to_state": new_convo.state.value,
+                    "event": event.value,
+                    "reason": "text_start",
+                }
+            )
+            return new_convo
+
         logger.error(
             "invalid_state_transition",
             extra={
