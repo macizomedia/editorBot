@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+# EditorBot Workflow Simulator
+# Quick launcher for testing bot interactions via CLI
+#
+# Usage:
+#   ./simulate [scenario] [options]
+#
+# Examples:
+#   ./simulate text_only
+#   ./simulate all --verbose
+#   ./simulate template_flow
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EDITORBOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Check if we're in the right directory
+if [ ! -f "$EDITORBOT_DIR/bot/cli/simulate_full_workflow.py" ]; then
+    echo -e "${RED}Error: Cannot find simulate_full_workflow.py${NC}"
+    echo "This script must be run from: editorBot/bot/cli/"
+    exit 1
+fi
+
+# Change to editorBot directory
+cd "$EDITORBOT_DIR"
+
+# Find Python virtual environment
+if [ -n "$VIRTUAL_ENV" ]; then
+    PYTHON="python"
+    echo -e "${GREEN}✓${NC} Using active virtualenv: $VIRTUAL_ENV"
+elif [ -f ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+    echo -e "${GREEN}✓${NC} Using .venv/bin/python"
+elif [ -f "venv/bin/python" ]; then
+    PYTHON="venv/bin/python"
+    echo -e "${GREEN}✓${NC} Using venv/bin/python"
+elif [ -f "../.venv/bin/python" ]; then
+    PYTHON="../.venv/bin/python"
+    echo -e "${GREEN}✓${NC} Using ../.venv/bin/python"
+else
+    PYTHON="python3"
+    echo -e "${YELLOW}⚠${NC}  No virtual environment found, using system python3"
+fi
+
+# Default scenario
+SCENARIO="${1:-text_only}"
+shift || true  # Remove first argument, ignore error if no args
+
+# Build command
+CMD="$PYTHON -m bot.cli.simulate_full_workflow --scenario $SCENARIO $@"
+
+# Print banner
+echo ""
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}          EditorBot Workflow Simulator${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${GREEN}Scenario:${NC} $SCENARIO"
+echo -e "${GREEN}Command:${NC}  $CMD"
+echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Run simulation
+exec $CMD
