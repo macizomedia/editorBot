@@ -1,14 +1,15 @@
 import logging
 import tempfile
+import asyncio
 import boto3
 from botocore.exceptions import ClientError
+from datetime import datetime, UTC
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.state.machine import handle_event, EventType
-from bot.state.models import Conversation
-from bot.state.runtime import get_conversation, save_conversation
+from bot.graph.state import ConversationMessage, create_initial_state
+from bot.handlers.commands import get_graph
 from bot.services.transcription import transcribe_audio
 from bot.services.mediation import mediate_text
 
@@ -64,14 +65,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         }
     )
 
-    convo = get_conversation(chat_id)
-
     try:
-        # 1. FSM: voice received
-        convo = handle_event(convo, EventType.VOICE_RECEIVED)
-        save_conversation(chat_id, convo)
+        graph = await get_graph()
+        thread_id = f"{chat_id}:{update.effective_user.id}"
+        state = await graph.get_state(thread_id) or create_initial_state(chat_id, update.effective_user.id)
 
-        # 2. Send user feedback
+        # 1. Send user feedback
         await update.message.reply_text("🎤 Audio recibido. Transcribiendo...")
 
         # 3. Download voice file
@@ -86,8 +85,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             import shutil
             shutil.copy(tmp.name, wav_path)
 
-            # 4. Transcribe
-            transcript = transcribe_audio(tmp.name)
+            # 4. Transcribe (run in thread)
+            transcript = await asyncio.to_thread(transcribe_audio, tmp.name)
 
             logger.info(
                 "transcription_complete",
@@ -104,7 +103,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "transcription_failed",
                     extra={"chat_id": chat_id, "error": transcript}
                 )
-                save_conversation(chat_id, Conversation())
                 await update.message.reply_text(
                     "⚠️ No pude transcribir el audio. Intenta nuevamente."
                 )
@@ -112,17 +110,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             # 4b. Save audio to S3 for later use in render plan
             try:
-                audio_s3_path = save_audio_to_s3(wav_path, chat_id)
-                convo.audio_s3_path = audio_s3_path
+                audio_s3_path = await asyncio.to_thread(save_audio_to_s3, wav_path, chat_id)
             except Exception as e:
+                audio_s3_path = None
                 logger.warning(f"Failed to save audio to S3, but continuing: {e}")
 
-        # 5. FSM: transcription complete
-        convo = handle_event(convo, EventType.TRANSCRIPTION_COMPLETE, transcript)
-        save_conversation(chat_id, convo)
-
-        # 5. Mediate
-        mediated = mediate_text(transcript)
+        # 5. Mediate (run in thread)
+        mediated = await asyncio.to_thread(mediate_text, transcript)
 
         logger.info(
             "mediation_complete",
@@ -134,19 +128,24 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             }
         )
 
-        # 6. FSM: mediated text ready
-        convo = handle_event(convo, EventType.TEXT_RECEIVED, mediated)
-        save_conversation(chat_id, convo)
-
-        # 7. Send to user
-        await update.message.reply_text(
-            "✍️ Texto mediado (borrador):\n\n"
-            f"{mediated}\n\n"
-            "Responde con:\n"
-            "- OK\n"
-            "- EDITAR (pegando texto)\n"
-            "- CANCELAR"
+        state["transcript"] = transcript
+        state["mediated_text"] = mediated
+        state["audio_s3_path"] = audio_s3_path
+        state["messages"].append(
+            ConversationMessage(
+                role="user",
+                content=mediated,
+                timestamp=datetime.now(UTC).isoformat(),
+                metadata={"raw_transcript": transcript},
+            )
         )
+
+        prev_len = len(state["messages"])
+        result = await graph.invoke(state, thread_id)
+        new_messages = result["messages"][prev_len:]
+        for msg in new_messages:
+            if msg["role"] == "assistant":
+                await update.message.reply_text(msg["content"])
 
     except Exception:
         logger.exception("Error handling voice message")

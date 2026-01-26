@@ -11,7 +11,6 @@ from datetime import datetime, UTC
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
-from bot.graph.feature_flag import use_langgraph_for_user
 from bot.graph.graph import EditorGraph
 from bot.graph.state import (
     create_initial_state,
@@ -49,14 +48,6 @@ async def handle_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-
-    # Check feature flag
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text(
-            "⚠️ LangGraph is not enabled for your account. "
-            "Using legacy system."
-        )
-        return
 
     logger.info(f"[/init] User {user_id} in chat {chat_id}")
 
@@ -119,10 +110,6 @@ async def handle_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text("⚠️ LangGraph not enabled")
-        return
-
     logger.info(f"[/template] User {user_id} in chat {chat_id}")
 
     # Get template client
@@ -152,18 +139,17 @@ async def handle_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Template `{template_id}` not found")
         return
 
-    # Extract requirements
-    script_structure = template_spec.get("script_structure", {})
-    beats = script_structure.get("beats", [])
-
-    required_fields = []
-    field_descriptions = {}
-
-    for beat in beats:
-        field_name = beat.get("name", "").lower().replace(" ", "_")
-        if field_name:
-            required_fields.append(field_name)
-            field_descriptions[field_name] = beat.get("description", field_name)
+    # Extract requirements from template roles
+    script_structure = template_spec.script_structure
+    required_fields = [
+        role.lower().replace(" ", "_")
+        for role in script_structure.required_roles
+    ]
+    optional_fields = [
+        role.lower().replace(" ", "_")
+        for role in script_structure.optional_roles
+    ]
+    field_descriptions = {field: field.replace("_", " ").title() for field in required_fields + optional_fields}
 
     # Update state
     graph = await get_graph()
@@ -171,10 +157,10 @@ async def handle_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = await graph.get_state(thread_id) or create_initial_state(chat_id, user_id)
 
     state["template_id"] = template_id
-    state["template_spec"] = template_spec
+    state["template_spec"] = template_spec.to_dict()
     state["template_requirements"] = {
         "required_fields": required_fields,
-        "optional_fields": ["call_to_action"],
+        "optional_fields": optional_fields or ["call_to_action"],
         "field_descriptions": field_descriptions,
     }
     state["current_phase"] = "collection"
@@ -201,10 +187,6 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text("⚠️ LangGraph not enabled")
-        return
 
     logger.info(f"[/start] User {user_id} in chat {chat_id}")
 
@@ -260,10 +242,6 @@ async def handle_context(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text("⚠️ LangGraph not enabled")
-        return
-
     if not context.args:
         await update.message.reply_text("Usage: /context <background information>")
         return
@@ -307,10 +285,6 @@ async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text("⚠️ LangGraph not enabled")
-        return
-
     logger.info(f"[/reset] User {user_id} in chat {chat_id}")
 
     graph = await get_graph()
@@ -339,10 +313,6 @@ async def handle_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-
-    if not use_langgraph_for_user(chat_id, user_id):
-        await update.message.reply_text("⚠️ LangGraph not enabled")
-        return
 
     logger.info(f"[/skip] User {user_id} in chat {chat_id}")
 

@@ -72,10 +72,11 @@ async def build_render_plan(
 
     # Step 4: Build render plan using domain logic
     builder = RenderPlanBuilder()
+    template_payload = template_spec.to_dict() if hasattr(template_spec, "to_dict") else template_spec
     try:
         render_plan = builder.build(
             script=script_dict,
-            template=template_spec,
+            template=template_payload,
             visual_strategy=visual_strategy,
             audio_source=audio_source,
         )

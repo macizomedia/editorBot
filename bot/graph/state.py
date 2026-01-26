@@ -105,9 +105,11 @@ class GraphState(TypedDict):
     template_id: Optional[str]
     template_spec: Optional[dict[str, Any]]  # Full template JSON
     template_requirements: Optional[TemplateRequirements]
+    template_candidates: Optional[list[dict[str, Any]]]  # Ranked template options
 
     # Accumulating video payload
     payload: VideoPayload
+    script: Optional[dict[str, Any]]  # Script with beats for render plan
 
     # Validation tracking
     validation_result: Optional[ValidationResult]
@@ -117,6 +119,7 @@ class GraphState(TypedDict):
     audio_s3_path: Optional[str]
     transcript: Optional[str]
     mediated_text: Optional[str]  # Dialect-neutralized version
+    render_plan: Optional[dict[str, Any]]  # Serialized RenderPlan JSON
 
     # Workflow control
     current_phase: Literal[
@@ -160,12 +163,15 @@ def create_initial_state(
         template_id=None,
         template_spec=None,
         template_requirements=None,
+        template_candidates=None,
         payload=VideoPayload(),
+        script=None,
         validation_result=None,
         validation_attempts=0,
         audio_s3_path=None,
         transcript=None,
         mediated_text=None,
+        render_plan=None,
         current_phase="init",
         next_field_to_collect=None,
         interrupt_for_human=False,

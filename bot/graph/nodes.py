@@ -5,8 +5,8 @@ Each node is a pure function: GraphState → GraphState
 Nodes perform one responsibility and update state immutably.
 """
 
-import asyncio
 import logging
+import re
 from datetime import datetime, UTC
 from typing import Any
 
@@ -19,10 +19,8 @@ from .state import (
     ValidationResult,
     AssistanceLevel,
 )
-from ..services.transcription import transcribe_audio
-from ..services.mediation import mediate_text
 from ..templates.client import TemplateClient
-from ..templates.models import TemplateSpec
+from ..handlers.render_plan import build_render_plan, format_render_plan_summary
 
 logger = logging.getLogger(__name__)
 
@@ -48,48 +46,80 @@ async def intake_node(state: GraphState) -> GraphState:
 
     latest_msg = state["messages"][-1]
 
-    # If message contains audio path, transcribe it
+    # Voice is pre-processed in the handler; avoid trying to transcribe S3 paths here.
     if state.get("audio_s3_path") and not state.get("transcript"):
-        logger.info(f"[INTAKE] Transcribing audio from {state['audio_s3_path']}")
-
-        # Transcribe (synchronous Whisper call, run in executor)
-        loop = asyncio.get_event_loop()
-        transcript = await loop.run_in_executor(
-            None,
-            transcribe_audio,
-            state["audio_s3_path"],
-            state["config"].get("language", "es"),
+        logger.warning(
+            "[INTAKE] audio_s3_path set without transcript; "
+            "voice should be processed in the handler."
         )
-
-        logger.info(f"[INTAKE] Transcription complete: {len(transcript)} chars")
-
-        # Mediate (neutralize dialect)
-        mediated = await mediate_text(
-            text=transcript,
-            profile="neutral",
-            target_language=state["config"].get("language", "es"),
-        )
-
-        logger.info(f"[INTAKE] Mediation complete: {len(mediated)} chars")
-
-        # Update state with transcription results
-        return {
-            **state,
-            "transcript": transcript,
-            "mediated_text": mediated,
-            "messages": state["messages"] + [
-                ConversationMessage(
-                    role="assistant",
-                    content=f"📝 Transcribed: {mediated}",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    metadata={"raw_transcript": transcript},
-                )
-            ],
-        }
+        return state
 
     # Text input already added to messages, just return
     logger.info("[INTAKE] Text message processed, moving to next node")
     return state
+
+
+# ============================================================================
+# TEMPLATE SUGGEST NODE: Propose templates based on user idea
+# ============================================================================
+
+async def template_suggest_node(state: GraphState) -> GraphState:
+    """
+    Suggest templates based on user's mediated text.
+
+    - Fetch templates from API
+    - Rank by simple keyword overlap
+    - Store top candidates in state
+    - Add assistant message with options
+    """
+    if state.get("template_id"):
+        return state
+
+    idea_text = (state.get("mediated_text") or "").strip()
+    client = TemplateClient()
+    templates = await client.get_template_summaries()
+
+    ranked = _rank_templates(templates, idea_text)
+    top = ranked[:5]
+
+    if not top:
+        return {
+            **state,
+            "current_phase": "template_select",
+            "messages": state["messages"] + [
+                ConversationMessage(
+                    role="assistant",
+                    content=(
+                        "⚠️ No pude cargar templates ahora mismo.\n"
+                        "Intenta más tarde o usa /template para reintentar."
+                    ),
+                    timestamp=datetime.now(UTC).isoformat(),
+                )
+            ],
+        }
+
+    lines = ["🎯 Templates sugeridos:"]
+    for tmpl in top:
+        name = tmpl.get("name", "Unnamed")
+        tid = tmpl.get("id", "unknown")
+        desc = tmpl.get("description", "Sin descripción")
+        lines.append(f"- {name} (`{tid}`): {desc}")
+
+    lines.append("\nElige uno con: /template <id>")
+
+    return {
+        **state,
+        "template_candidates": top,
+        "current_phase": "template_select",
+        "messages": state["messages"] + [
+            ConversationMessage(
+                role="assistant",
+                content="\n".join(lines),
+                timestamp=datetime.now(UTC).isoformat(),
+                metadata={"template_candidates": [t.get("id") for t in top]},
+            )
+        ],
+    }
 
 
 # ============================================================================
@@ -335,20 +365,62 @@ async def finalize_json_node(state: GraphState) -> GraphState:
     """
     logger.info(f"[FINALIZE] Finalizing payload for thread {state['thread_id']}")
 
-    # Here we would call render plan builder (deterministic, not AI)
-    # For now, just mark as finalized
+    template_spec = state.get("template_spec") or {}
+    audio_source = state.get("audio_s3_path")
+
+    if not state.get("script"):
+        script = _build_script_from_payload(
+            payload=state["payload"],
+            template_spec=template_spec,
+        )
+    else:
+        script = state["script"]
+
+    if not audio_source:
+        return {
+            **state,
+            "script": script,
+            "current_phase": "finalized",
+            "messages": state["messages"] + [
+                ConversationMessage(
+                    role="assistant",
+                    content=(
+                        "✅ Contenido validado, pero falta el audio original.\n"
+                        "Envía un mensaje de voz para generar el render plan."
+                    ),
+                    timestamp=datetime.now(UTC).isoformat(),
+                )
+            ],
+        }
+
+    visual_strategy = {
+        "soundtrack_id": None,
+        "visual_prompts": {},
+        "style_preset": "cinematic",
+    }
+
+    render_plan_json = await build_render_plan(
+        final_script=script,
+        template_id=state.get("template_id"),
+        soundtrack_id=None,
+        asset_config=visual_strategy,
+        audio_source=audio_source,
+    )
+
+    summary = format_render_plan_summary(render_plan_json)
 
     return {
         **state,
+        "script": script,
+        "render_plan": render_plan_json,
         "current_phase": "finalized",
         "messages": state["messages"] + [
             ConversationMessage(
                 role="assistant",
                 content=(
-                    "🎬 Render plan generated successfully!\n\n"
-                    f"Template: {state['template_id']}\n"
-                    f"Format: {state['config']['video_format']}\n\n"
-                    "Ready to render. Use /render to start production."
+                    "🎬 Render plan generado.\n\n"
+                    f"{summary}\n\n"
+                    "Listo para render. Usa /render para iniciar producción."
                 ),
                 timestamp=datetime.now(UTC).isoformat(),
             )
@@ -509,3 +581,66 @@ Return JSON:
             suggestions=["Validation error: could not parse LLM response"],
             confidence=0.0,
         )
+
+
+def _rank_templates(templates: list[dict[str, Any]], idea_text: str) -> list[dict[str, Any]]:
+    if not idea_text:
+        return templates
+
+    tokens = set(re.findall(r"[a-zA-Záéíóúñü]+", idea_text.lower()))
+
+    def score(tmpl: dict[str, Any]) -> int:
+        hay = f"{tmpl.get('name', '')} {tmpl.get('description', '')}".lower()
+        hits = sum(1 for tok in tokens if tok in hay)
+        return hits
+
+    return sorted(templates, key=score, reverse=True)
+
+
+def _build_script_from_payload(
+    payload: dict[str, Any],
+    template_spec: dict[str, Any],
+) -> dict[str, Any]:
+    duration = template_spec.get("duration", {})
+    target_seconds = duration.get("target_seconds", 45)
+
+    script_structure = template_spec.get("script_structure", {})
+    required_roles = script_structure.get("required_roles", [])
+    optional_roles = script_structure.get("optional_roles", [])
+
+    beats = []
+    roles = required_roles + optional_roles
+    usable_roles = []
+
+    for role in roles:
+        role_key = role.lower().replace(" ", "_")
+        text = payload.get(role_key)
+        if text:
+            usable_roles.append((role_key, text))
+
+    if not usable_roles:
+        # Fallback: use any payload fields in order
+        usable_roles = [(k, v) for k, v in payload.items() if v]
+
+    if not usable_roles:
+        raise ValueError("Cannot build script: payload is empty")
+
+    beat_duration = max(3, int(target_seconds / len(usable_roles)))
+
+    for role_key, text in usable_roles:
+        beats.append(
+            {
+                "role": role_key,
+                "text": text,
+                "duration": beat_duration,
+                "keywords": [],
+            }
+        )
+
+    total_duration = sum(beat["duration"] for beat in beats)
+
+    return {
+        "total_duration": total_duration,
+        "structure_type": "auto_generated",
+        "beats": beats,
+    }

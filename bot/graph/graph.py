@@ -25,6 +25,7 @@ except (ImportError, ModuleNotFoundError):
 from .state import GraphState, create_initial_state
 from .nodes import (
     intake_node,
+    template_suggest_node,
     requirement_collector_node,
     validator_node,
     finalize_json_node,
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # CONDITIONAL ROUTING FUNCTIONS
 # ============================================================================
 
-def route_after_intake(state: GraphState) -> Literal["template_select", "collection", "error"]:
+def route_after_intake(state: GraphState) -> Literal["template_suggest", "collection", "error"]:
     """
     Route after intake node based on current phase.
 
@@ -49,11 +50,22 @@ def route_after_intake(state: GraphState) -> Literal["template_select", "collect
         return "error"
 
     if not state.get("template_id"):
-        logger.info("[ROUTE] No template selected, routing to template_select")
-        return "template_select"
+        logger.info("[ROUTE] No template selected, routing to template_suggest")
+        return "template_suggest"
 
     logger.info("[ROUTE] Template selected, routing to collection")
     return "collection"
+
+
+def route_after_template_suggest(
+    state: GraphState
+) -> Literal["template_suggest", "error"]:
+    """
+    After suggesting templates, pause execution.
+    """
+    if state["current_phase"] == "error":
+        return "error"
+    return "template_suggest"
 
 
 def route_after_collection(
@@ -172,6 +184,7 @@ def create_editor_graph() -> StateGraph:
 
     # Add nodes
     workflow.add_node("intake", intake_node)
+    workflow.add_node("template_suggest", template_suggest_node)
     workflow.add_node("collection", requirement_collector_node)
     workflow.add_node("validation", validator_node)
     workflow.add_node("finalize", finalize_json_node)
@@ -184,8 +197,17 @@ def create_editor_graph() -> StateGraph:
         "intake",
         route_after_intake,
         {
-            "template_select": "collection",  # Prompt for template in collection node
+            "template_suggest": "template_suggest",
             "collection": "collection",
+            "error": END,
+        }
+    )
+
+    workflow.add_conditional_edges(
+        "template_suggest",
+        route_after_template_suggest,
+        {
+            "template_suggest": END,
             "error": END,
         }
     )

@@ -4,7 +4,7 @@ A Telegram bot that mediates text dialects to standardized Spanish using the dia
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Telegram Bot Token (from @BotFather)
 - Google Gemini API Key
 
@@ -143,7 +143,7 @@ editorBot/
 |----------|----------|-------------|
 | TELEGRAM_BOT_TOKEN | ✅ | Token from BotFather |
 | GEMINI_API_KEY | ✅ | Google Gemini API key |
-| GEMINI_MODEL | ❌ | Model name (default: gemini-2.0-pro) |
+| GEMINI_MODEL | ❌ | Model name (default: gemini-2.5-pro) |
 | GEMINI_TEMPERATURE | ❌ | Temperature for responses (default: 0.3) |
 | LOG_LEVEL | ❌ | Logging level (default: INFO) |
 | WHISPER_MODEL | ❌ | Local transcription model (when enabled) |
@@ -198,7 +198,7 @@ pip install -e ../dialect_mediator
 ### Module import errors
 - Ensure you're in a virtual environment
 - Reinstall dialect_mediator: `pip install -e ../dialect_mediator`
-- Check Python version: `python --version` (requires 3.10+)
+- Check Python version: `python --version` (requires 3.11+)
 
 ## Development
 

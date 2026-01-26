@@ -81,6 +81,11 @@ class MockMessage:
     audio: Optional[MockAudio] = None
     caption: Optional[str] = None
 
+    @property
+    def chat_id(self) -> int:
+        """Get chat_id from chat object (for compatibility with Telegram API)."""
+        return self.chat.id
+
     async def reply_text(self, text: str, **kwargs) -> MockMessage:
         """Mock reply to message."""
         print(f"\n🤖 Bot Reply:\n{text}\n")

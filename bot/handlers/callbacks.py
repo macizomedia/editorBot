@@ -4,14 +4,9 @@ import logging
 
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import ContextTypes
-
-from bot.state.machine import handle_event, EventType
-from bot.state.models import BotState
-from bot.state.runtime import get_conversation, save_conversation
+from bot.graph.state import create_initial_state
+from bot.handlers.commands import get_graph
 from bot.templates.client import TemplateClient
-from bot.templates.validator import validate_script
-from bot.templates.models import TemplateSpec
-from bot.handlers.render_plan import build_render_plan, format_render_plan_summary
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +48,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if chat_id is None:
         return
 
-    convo = get_conversation(chat_id)
     data = query.data or ""
 
     try:
@@ -68,10 +62,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 }
             )
 
-            # Fetch full template specification
             try:
                 client = TemplateClient()
-                template_spec = client.get_template(template_id)
+                template_spec = await client.get_template_spec(template_id)
             except Exception as e:
                 logger.exception(f"Failed to fetch template {template_id}")
                 await query.message.reply_text(f"❌ Error al cargar template: {str(e)}")
@@ -82,134 +75,45 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await query.message.reply_text("❌ Template no encontrado. Intenta de nuevo.")
                 return
 
-            # Validate script against template
-            if convo.final_script:
-                # Parse final_script if it's a string
-                script_data = convo.final_script
-                if isinstance(script_data, str):
-                    try:
-                        import json
-                        script_data = json.loads(script_data)
-                    except:
-                        # If parsing fails, create minimal structure for validation
-                        script_data = {'total_duration': 0, 'structure_type': 'unknown', 'beats': []}
+            script_structure = template_spec.script_structure
+            required_fields = [
+                role.lower().replace(" ", "_")
+                for role in script_structure.required_roles
+            ]
+            optional_fields = [
+                role.lower().replace(" ", "_")
+                for role in script_structure.optional_roles
+            ]
+            field_descriptions = {field: field.replace("_", " ").title() for field in required_fields + optional_fields}
 
-                result = validate_script(script_data, template_spec)
+            graph = await get_graph()
+            thread_id = f"{chat_id}:{update.effective_user.id}"
+            state = await graph.get_state(thread_id) or create_initial_state(chat_id, update.effective_user.id)
 
-                # Store validation result
-                convo.validation_result = result.to_dict()
+            state["template_id"] = template_id
+            state["template_spec"] = template_spec.to_dict()
+            state["template_requirements"] = {
+                "required_fields": required_fields,
+                "optional_fields": optional_fields or ["call_to_action"],
+                "field_descriptions": field_descriptions,
+            }
+            state["current_phase"] = "collection"
 
-                # Handle validation result based on enforcement policy
-                if not result.passed and template_spec.enforcement.strict:
-                    # Strict template: reject if validation fails
-                    error_msg = f"❌ Este guión NO es compatible con {template_spec.name}\n\nProblemas detectados:\n"
-                    for error in result.errors[:5]:  # Limit to first 5 errors
-                        error_msg += f"• {error}\n"
-                    error_msg += "\nOpciones:\n"
-                    error_msg += "Escribe EDITAR para modificar el guión\n"
-                    error_msg += "O selecciona otro template"
+            await query.message.reply_text(f"✅ Template seleccionado: {template_spec.name}")
 
-                    await query.message.reply_text(error_msg)
-                    return
-
-                elif result.warnings and not result.passed:
-                    # Flexible template with warnings
-                    warning_msg = f"⚠️ Template: {template_spec.name} (modo flexible)\n\nSugerencias de mejora:\n"
-                    for warning in result.warnings[:3]:
-                        warning_msg += f"• {warning}\n"
-                    if result.errors:
-                        warning_msg += "\nProblemas detectados:\n"
-                        for error in result.errors[:3]:
-                            warning_msg += f"• {error}\n"
-                    warning_msg += "\n¿Continuar de todas formas? (OK/EDITAR)"
-
-                    await query.message.reply_text(warning_msg)
-                    # Allow continuation even with warnings
-
-                # Success case
-                success_msg = f"✅ Template seleccionado: {template_spec.name}\n\n"
-                if result.passed:
-                    success_msg += "Tu guión cumple con todos los requisitos.\n"
-                success_msg += "\nAhora elige una banda sonora..."
-
-            # Update conversation - transition to SELECT_SOUNDTRACK state
-            convo = handle_event(convo, EventType.TEMPLATE_SELECTED, template_id)
-            convo.template_spec = template_spec.to_dict()
-
-            # Add explicit state transition to SELECT_SOUNDTRACK before sending keyboard
-            convo.state = BotState.SELECT_SOUNDTRACK
-            save_conversation(chat_id, convo)
-
-            await query.message.reply_text(
-                success_msg if convo.final_script else f"✅ Template seleccionado: {template_spec.name}\n\n🎵 Selecciona un soundtrack:",
-                reply_markup=_soundtrack_keyboard()
-            )
+            prev_len = len(state["messages"])
+            result = await graph.invoke(state, thread_id)
+            new_messages = result["messages"][prev_len:]
+            for msg in new_messages:
+                if msg["role"] == "assistant":
+                    await query.message.reply_text(msg["content"])
             return
 
         if data.startswith("music:"):
-            soundtrack_id = data.split(":", 1)[1]
-
-            logger.info(
-                "soundtrack_selected",
-                extra={
-                    "chat_id": chat_id,
-                    "soundtrack_id": soundtrack_id,
-                }
+            await query.message.reply_text(
+                "🎵 La selección de soundtrack está temporalmente deshabilitada "
+                "mientras migramos el flujo a LangGraph."
             )
-
-            convo = handle_event(convo, EventType.SOUNDTRACK_SELECTED, soundtrack_id)
-            save_conversation(chat_id, convo)
-
-            # Trigger asset configuration (for now, use default config)
-            default_asset_config = {
-                "visual_prompts": {},
-                "style_preset": "cinematic"
-            }
-            convo = handle_event(convo, EventType.ASSETS_CONFIGURED, default_asset_config)
-            save_conversation(chat_id, convo)
-
-            # Build render plan
-            await query.message.reply_text("⚙️ Generando plan de render...")
-
-            try:
-                # Use audio path from conversation (saved when voice was processed)
-                if not convo.audio_s3_path:
-                    logger.error("Audio S3 path not available in conversation")
-                    await query.message.reply_text(
-                        "❌ Error: Archivo de audio no disponible. Intenta de nuevo."
-                    )
-                    return
-
-                render_plan_json = await build_render_plan(
-                    final_script=convo.final_script,
-                    template_id=convo.template_id,
-                    soundtrack_id=soundtrack_id if soundtrack_id != "none" else None,
-                    asset_config=default_asset_config,
-                    audio_source=convo.audio_s3_path,
-                )
-
-                # Save to conversation state
-                convo = handle_event(convo, EventType.RENDER_PLAN_BUILT, render_plan_json)
-                convo.visual_strategy = {
-                    "soundtrack_id": soundtrack_id,
-                    "visual_prompts": default_asset_config.get("visual_prompts", {}),
-                    "style_preset": default_asset_config.get("style_preset"),
-                }
-                save_conversation(chat_id, convo)
-
-                # Send summary
-                summary = format_render_plan_summary(render_plan_json)
-                await query.message.reply_text(summary, parse_mode="Markdown")
-
-            except ValueError as e:
-                logger.error(f"Render plan generation failed: {e}")
-                await query.message.reply_text(
-                    f"❌ Error generando render plan: {e}\n\n"
-                    "Por favor revisa el guión y template e intenta de nuevo."
-                )
-            except Exception:
-                logger.exception("Unexpected error building render plan")
-                await query.message.reply_text("⚠️ Error inesperado. Intenta de nuevo.")
 
             return
 

@@ -5,6 +5,7 @@ Template API client for fetching templates from Lambda.
 import os
 import logging
 import requests
+import asyncio
 from typing import List, Optional, Dict
 from .models import TemplateSpec
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.environ.get(
     'TEMPLATE_API_URL',
-    'https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com'
+    'https://wb1c0yjmzk.execute-api.eu-central-1.amazonaws.com'
 )
 
 
@@ -49,6 +50,10 @@ class TemplateClient:
         except requests.RequestException as e:
             logger.exception(f"Error fetching templates from {self.base_url}: {e}")
             return []
+
+    async def get_template_summaries(self) -> List[Dict]:
+        """Async wrapper for list_templates to avoid blocking the event loop."""
+        return await asyncio.to_thread(self.list_templates)
 
     def get_template(self, template_id: str) -> Optional[TemplateSpec]:
         """
@@ -88,3 +93,7 @@ class TemplateClient:
         except Exception as e:
             logger.exception(f"Unexpected error parsing template {template_id}: {e}")
             return None
+
+    async def get_template_spec(self, template_id: str) -> Optional[TemplateSpec]:
+        """Async wrapper for get_template to avoid blocking the event loop."""
+        return await asyncio.to_thread(self.get_template, template_id)

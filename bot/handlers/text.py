@@ -1,13 +1,11 @@
 import logging
+from datetime import datetime, UTC
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.state.machine import handle_event, EventType
-from bot.state.models import BotState
-from bot.state.runtime import get_conversation, save_conversation
-from bot.services.script_generation import generate_script
-from bot.handlers.callbacks import send_template_selection
+from bot.graph.state import ConversationMessage, create_initial_state
+from bot.handlers.commands import get_graph
 
 logger = logging.getLogger(__name__)
 
@@ -18,105 +16,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("⚠️ El mensaje está vacío.")
         return
 
-    convo = get_conversation(chat_id)
-
     try:
-        if text.upper() == "OK":
-            convo = handle_event(convo, EventType.COMMAND_OK)
+        graph = await get_graph()
+        thread_id = f"{chat_id}:{user_id}"
+        state = await graph.get_state(thread_id) or create_initial_state(chat_id, user_id)
 
-            if convo.state == BotState.TEMPLATE_PROPOSED:
-                save_conversation(chat_id, convo)
-                logger.info(f"Showing template selection for chat {chat_id}")
-                # Show template selection buttons
-                await send_template_selection(chat_id, context)
-                return  # Don't send generic confirmation
-            elif convo.state == BotState.SCRIPT_DRAFTED:
-                script_draft = generate_script(convo.mediated_text or "")
-                convo.script_draft = script_draft
-                save_conversation(chat_id, convo)
-                await update.message.reply_text(
-                    "📝 Guion (borrador):\n\n"
-                    f"{script_draft}\n\n"
-                    "Responde con:\n"
-                    "- OK\n"
-                    "- EDITAR (pegando texto)\n"
-                    "- CANCELAR"
-                )
-            elif convo.state == BotState.FINAL_SCRIPT:
-                convo = handle_event(convo, EventType.COMMAND_NEXT)
-                save_conversation(chat_id, convo)
-                # After COMMAND_NEXT, should be in TEMPLATE_PROPOSED, send templates
-                logger.info(f"After COMMAND_NEXT, state is: {convo.state}")
-                if convo.state == BotState.TEMPLATE_PROPOSED:
-                    logger.info(f"Showing template selection for chat {chat_id}")
-                    await send_template_selection(chat_id, context)
-                    return
-                else:
-                    await update.message.reply_text("✅ Script finalizado. Continuamos.")
-            else:
-                await update.message.reply_text("✅ Texto confirmado. Continuamos.")
-
-        elif text.upper() == "CANCELAR":
-            convo = handle_event(convo, EventType.COMMAND_CANCELAR)
-
-            await update.message.reply_text(
-                "❌ Proceso cancelado."
+        state["messages"].append(
+            ConversationMessage(
+                role="user",
+                content=text,
+                timestamp=datetime.now(UTC).isoformat(),
             )
-        elif text.upper() == "EDITAR":
-            convo = handle_event(convo, EventType.COMMAND_EDITAR)
-            await update.message.reply_text(
-                "✏️ Pega el texto editado a continuación."
-            )
+        )
 
-        elif text.upper() == "NEXT":
-            convo = handle_event(convo, EventType.COMMAND_NEXT)
-            save_conversation(chat_id, convo)
-            # If transitioning to TEMPLATE_PROPOSED, show templates
-            if convo.state == BotState.TEMPLATE_PROPOSED:
-                logger.info(f"Showing template selection for chat {chat_id} after NEXT command")
-                await send_template_selection(chat_id, context)
-                return
-            else:
-                await update.message.reply_text("Continuamos al siguiente paso.")
+        prev_len = len(state["messages"])
+        result = await graph.invoke(state, thread_id)
 
-
-        else:
-            convo = handle_event(convo, EventType.TEXT_RECEIVED, text)
-
-            if convo.state == BotState.SCRIPT_DRAFTED:
-                script_draft = generate_script(convo.mediated_text or "")
-                convo.script_draft = script_draft
-                save_conversation(chat_id, convo)
-                await update.message.reply_text(
-                    "📝 Guion (borrador):\n\n"
-                    f"{script_draft}\n\n"
-                    "Responde con:\n"
-                    "- OK\n"
-                    "- EDITAR (pegando texto)\n"
-                    "- CANCELAR"
-                )
-            elif convo.state == BotState.FINAL_SCRIPT:
-                # Already in FINAL_SCRIPT after editing, now transition to TEMPLATE_PROPOSED
-                convo = handle_event(convo, EventType.COMMAND_OK)
-                save_conversation(chat_id, convo)
-                if convo.state == BotState.TEMPLATE_PROPOSED:
-                    logger.info(f"Showing template selection for chat {chat_id} after script finalized")
-                    await send_template_selection(chat_id, context)
-                else:
-                    await update.message.reply_text("✅ Script finalizado. Continuamos.")
-            else:
-                await update.message.reply_text(
-                    "✍️ Texto recibido.\nPuedes editarlo o responder OK."
-                )
-
-        save_conversation(chat_id, convo)
+        new_messages = result["messages"][prev_len:]
+        for msg in new_messages:
+            if msg["role"] == "assistant":
+                await update.message.reply_text(msg["content"])
 
     except Exception:
         logger.exception("Error handling text message")
         await update.message.reply_text("⚠️ Ocurrió un error. Intenta de nuevo.")
-
