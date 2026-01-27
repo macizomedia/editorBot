@@ -10,6 +10,14 @@ from bot.handlers.commands import get_graph
 logger = logging.getLogger(__name__)
 
 
+def _extract_message_fields(message):
+    if hasattr(message, "role") and hasattr(message, "content"):
+        return message.role, message.content
+    if isinstance(message, dict):
+        return message.get("role"), message.get("content")
+    return None, None
+
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         logger.warning("Received text update without message payload")
@@ -40,8 +48,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         new_messages = result["messages"][prev_len:]
         for msg in new_messages:
-            if msg["role"] == "assistant":
-                await update.message.reply_text(msg["content"])
+            role, content = _extract_message_fields(msg)
+            if role == "assistant" and content:
+                await update.message.reply_text(content)
 
     except Exception:
         logger.exception("Error handling text message")

@@ -148,6 +148,8 @@ editorBot/
 | LOG_LEVEL | ❌ | Logging level (default: INFO) |
 | WHISPER_MODEL | ❌ | Local transcription model (when enabled) |
 | WHISPER_LANG | ❌ | Local transcription language (default: es) |
+| CONTENT_BUCKET_NAME | ❌ | S3 bucket for audio uploads (default: content-pipeline) |
+| CONTENT_AUDIO_PREFIX | ❌ | S3 prefix for audio uploads (default: audio) |
 
 ## Credential & Environment Management
 

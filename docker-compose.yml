@@ -12,6 +12,8 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_LANG=${WHISPER_LANG:-es}
       - TEMPLATE_API_URL=${TEMPLATE_API_URL:-https://wb1c0yjmzk.execute-api.eu-central-1.amazonaws.com}
+      - CONTENT_BUCKET_NAME=${CONTENT_BUCKET_NAME:-content-pipeline}
+      - CONTENT_AUDIO_PREFIX=${CONTENT_AUDIO_PREFIX:-audio}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/secure/google-credentials.json}
       - LANGGRAPH_ROLLOUT_PCT=${LANGGRAPH_ROLLOUT_PCT:-0}
       - CHECKPOINT_DB_PATH=${CHECKPOINT_DB_PATH:-/app/data/checkpoints.db}

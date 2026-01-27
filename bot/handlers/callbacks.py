@@ -127,7 +127,7 @@ async def send_template_selection(chat_id: int, context: ContextTypes.DEFAULT_TY
     try:
         logger.info(f"Fetching templates for chat {chat_id}")
         client = TemplateClient()
-        templates = client.list_templates()
+        templates = await client.get_template_summaries()
         logger.info(f"Retrieved {len(templates)} templates for chat {chat_id}")
 
         if not templates:
