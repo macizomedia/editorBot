@@ -1,6 +1,7 @@
 import logging
 import tempfile
 import asyncio
+import os
 import boto3
 from botocore.exceptions import ClientError
 from datetime import datetime, UTC
@@ -12,12 +13,13 @@ from bot.graph.state import ConversationMessage, create_initial_state
 from bot.handlers.commands import get_graph
 from bot.services.transcription import transcribe_audio
 from bot.services.mediation import mediate_text
+from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
 
 # S3 configuration
-S3_BUCKET = "content-pipeline"
-S3_AUDIO_PREFIX = "audio"
+S3_BUCKET = os.environ.get("CONTENT_BUCKET_NAME", "content-pipeline")
+S3_AUDIO_PREFIX = os.environ.get("CONTENT_AUDIO_PREFIX", "audio")
 
 
 def save_audio_to_s3(local_path: str, chat_id: int) -> str:
@@ -25,12 +27,13 @@ def save_audio_to_s3(local_path: str, chat_id: int) -> str:
     try:
         s3_client = boto3.client("s3")
         s3_key = f"{S3_AUDIO_PREFIX}/{chat_id}/narration.wav"
+        content_type = "audio/wav" if local_path.endswith(".wav") else "audio/ogg"
 
         s3_client.upload_file(
             local_path,
             S3_BUCKET,
             s3_key,
-            ExtraArgs={"ContentType": "audio/wav"}
+            ExtraArgs={"ContentType": content_type}
         )
 
         s3_path = f"s3://{S3_BUCKET}/{s3_key}"
@@ -45,6 +48,19 @@ def save_audio_to_s3(local_path: str, chat_id: int) -> str:
     except ClientError as e:
         logger.exception(f"Failed to save audio to S3 for chat {chat_id}: {e}")
         raise
+
+
+def _convert_to_wav(source_path: str, wav_path: str) -> None:
+    audio = AudioSegment.from_file(source_path)
+    audio.export(wav_path, format="wav")
+
+
+def _extract_message_fields(message):
+    if hasattr(message, "role") and hasattr(message, "content"):
+        return message.role, message.content
+    if isinstance(message, dict):
+        return message.get("role"), message.get("content")
+    return None, None
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -80,10 +96,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         with tempfile.NamedTemporaryFile(suffix=".ogg") as tmp:
             await file.download_to_drive(tmp.name)
 
-            # Convert to WAV for consistency (rename since we already have .ogg)
+            # Convert to WAV for consistency (actual re-encode)
             wav_path = tmp.name.replace(".ogg", ".wav")
-            import shutil
-            shutil.copy(tmp.name, wav_path)
+            try:
+                await asyncio.to_thread(_convert_to_wav, tmp.name, wav_path)
+            except Exception as e:
+                logger.warning(f"Failed to convert audio to WAV, continuing with original: {e}")
+                wav_path = tmp.name
 
             # 4. Transcribe (run in thread)
             transcript = await asyncio.to_thread(transcribe_audio, tmp.name)
@@ -144,8 +163,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         result = await graph.invoke(state, thread_id)
         new_messages = result["messages"][prev_len:]
         for msg in new_messages:
-            if msg["role"] == "assistant":
-                await update.message.reply_text(msg["content"])
+            role, content = _extract_message_fields(msg)
+            if role == "assistant" and content:
+                await update.message.reply_text(content)
 
     except Exception:
         logger.exception("Error handling voice message")

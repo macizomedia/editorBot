@@ -67,26 +67,22 @@ Ensure these GitHub Secrets are configured in `editorbot-stack` repository:
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION` (eu-central-1)
-- `EDITORBOT_INSTANCE_ID` (i-013b229ba83c93cb9)
+- `EDITORBOT_INSTANCE_ID` (EC2 instance ID for the control VM)
 - `TOKEN_DEPLOY` (GitHub PAT for submodule access)
 
-### Step 1: Update Environment Variables (One-time Setup)
+### Step 1: Set Runtime Secrets (One-time Setup)
 
-Before first deployment, add TEMPLATE_API_URL to EC2 via SSM:
+Before first deployment, store secrets in SSM Parameter Store (recommended):
 
 ```bash
-# Connect securely via SSM (no SSH keys needed)
-aws ssm start-session --target i-013b229ba83c93cb9 --region eu-central-1
+aws ssm put-parameter --name "/editorbot/telegram_bot_token" --type "SecureString" --value "<TELEGRAM_BOT_TOKEN>" --overwrite --region eu-central-1
+aws ssm put-parameter --name "/editorbot/gemini_api_key" --type "SecureString" --value "<GEMINI_API_KEY>" --overwrite --region eu-central-1
+aws ssm put-parameter --name "/editorbot/template_api_url" --type "SecureString" --value "<TEMPLATE_API_URL>" --overwrite --region eu-central-1
+aws ssm put-parameter --name "/content-pipeline/content_bucket_name" --type "SecureString" --value "<CONTENT_BUCKET_NAME>" --overwrite --region eu-central-1
 
-# Once connected
-cd /home/ubuntu/editorbot
-echo 'TEMPLATE_API_URL=https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com' >> .env
-
-# Verify
-grep TEMPLATE_API_URL .env
-
-# Exit session
-exit
+Note: If Terraform appends a random suffix to the content bucket name, set
+`/content-pipeline/content_bucket_name` after the first apply using the actual
+bucket name it creates.
 ```
 
 ### Step 2: Merge Development → Main (Triggers Deployment)
@@ -228,10 +224,10 @@ docker compose up -d
 **Diagnosis:**
 ```bash
 # Check API endpoint
-curl https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com/templates
+curl <TEMPLATE_API_URL>/templates
 
 # Check from inside container
-docker exec editorbot-editorbot-1 curl https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com/templates
+docker exec editorbot-editorbot-1 curl <TEMPLATE_API_URL>/templates
 ```
 
 **Solution:** Verify Lambda API is running (see Terraform outputs)
@@ -312,7 +308,7 @@ git push origin main
 **Option 2: Manual Rollback (Emergency Only)**
 ```bash
 # Connect via SSM
-aws ssm start-session --target i-013b229ba83c93cb9 --region eu-central-1
+aws ssm start-session --target <EDITORBOT_INSTANCE_ID> --region eu-central-1
 
 # On EC2
 cd /home/ubuntu/editorbot
@@ -342,9 +338,9 @@ docker compose up -d --build
 
 ## 🔗 References
 
-- **Lambda API Endpoint:** https://qcol9gunw4.execute-api.eu-central-1.amazonaws.com
+- **Lambda API Endpoint:** <TEMPLATE_API_URL>
 - **Templates S3 Bucket:** bot-templates-20260121100906067300000001
-- **EC2 Instance:** i-013b229ba83c93cb9 (18.198.2.201)
+- **EC2 Instance:** <EDITORBOT_INSTANCE_ID> (control VM)
 - **Implementation Plan:** [TEMPLATE_INTEGRATION_PLAN.md](../../content-pipeline-docs/TEMPLATE_INTEGRATION_PLAN.md)
 - **Template Specs:** [aws-content-pipeline/templates/](../../aws-content-pipeline/templates/)
 
